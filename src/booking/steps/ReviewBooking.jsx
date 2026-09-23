@@ -1,9 +1,18 @@
-import { useNavigate } from 'react-router-dom';
-import { BAG_SIZES, CABIN_CLASSES, countryById, formatPickupAddress } from '../catalog';
-import { documentFieldKey, documentLabel, getVisibleVerificationRules } from '../../utility';
+import { useNavigate } from "react-router-dom";
+import {
+  BAG_SIZES,
+  CABIN_CLASSES,
+  countryById,
+  formatPickupAddress,
+} from "../catalog";
+import {
+  documentFieldKey,
+  documentLabel,
+  getVisibleVerificationRules,
+} from "../../utility";
 
 function Row({ label, value }) {
-  if (value == null || value === '') return null;
+  if (value == null || value === "") return null;
   return (
     <div className="review-row">
       <span>{label}</span>
@@ -50,7 +59,12 @@ export default function ReviewBooking({ data = {}, submitError }) {
       </Card>
 
       <Card title="Flight" to="/flight">
-        <Row label="Flight type" value={data.flightType} />
+        <Row
+          label="Flight type"
+          value={data.flightType
+            ?.replace(/_/g, " ")
+            .replace(/\b\w/g, (char) => char.toUpperCase())}
+        />
         <Row label="Cabin class" value={cabin?.name} />
         <Row label="Airport" value={data.airportLabel || data.airport} />
         <Row label="Airline" value={data.airlineLabel || data.airline} />
@@ -66,8 +80,8 @@ export default function ReviewBooking({ data = {}, submitError }) {
           return (
             <Row
               key={field}
-              label={`${documentLabel(rule)}${rule.required ? ' *' : ''}`}
-              value={doc?.name || doc?.value || ''}
+              label={`${documentLabel(rule)}${rule.required ? " *" : ""}`}
+              value={doc?.name || doc?.value || ""}
             />
           );
         })}
@@ -77,14 +91,11 @@ export default function ReviewBooking({ data = {}, submitError }) {
         <Row label="Room / floor" value={data.floor} />
         <Row label="Address" value={formatPickupAddress(data)} />
         <Row label="Country" value={country?.name} />
-        <Row
-          label="Contact"
-          value={`${data.phoneCode} ${data.phone}`.trim()}
-        />
+        <Row label="Contact" value={`${data.phone}`.trim()} />
         {data.altPhone ? (
           <Row
             label="Alternate contact"
-            value={`${data.altPhoneCode} ${data.altPhone}`.trim()}
+            value={` ${data.altPhone}`.trim()}
           />
         ) : null}
       </Card>
@@ -101,7 +112,10 @@ export default function ReviewBooking({ data = {}, submitError }) {
             <div key={bag.id} className="review-bag">
               <Row label={`Bag ${bagIndex + 1}`} value={bag.name} />
               <Row label="Size" value={bagSize(bag.size)} />
-              <Row label="Weight" value={bag.weight ? `${bag.weight} kg` : ''} />
+              <Row
+                label="Weight"
+                value={bag.weight ? `${bag.weight} kg` : ""}
+              />
             </div>
           ))}
         </Card>
