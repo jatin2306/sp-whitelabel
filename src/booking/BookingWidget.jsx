@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
 import {
   Navigate,
   Outlet,
@@ -7,19 +7,27 @@ import {
   useLocation,
   useNavigate,
   useOutletContext,
-} from 'react-router-dom';
-import { airportLabel, CABIN_CLASSES, formatPickupAddress, PAYMENT_PATH, REVIEW_PATH, STEPS, SUCCESS_PATH } from './catalog';
-import { calcTotal, formatMoney } from './pricing';
-import { applyTheme, getTheme } from './theme';
-import { useIframeResize } from './useIframeResize';
-import BagsStep, { emptyPassenger } from './steps/BagsStep';
-import DocumentsStep from './steps/DocumentsStep';
-import PickupStep from './steps/PickupStep';
-import PaymentPage from './steps/PaymentPage';
-import TimeslotStep from './steps/TimeslotStep';
-import TripStep from './steps/TripStep';
-import { clearBooking, loadBooking, saveBooking } from '../config/storage';
-import createBooking, { getCheckout } from '../config/services/booking';
+} from "react-router-dom";
+import {
+  airportLabel,
+  CABIN_CLASSES,
+  formatPickupAddress,
+  PAYMENT_PATH,
+  REVIEW_PATH,
+  STEPS,
+  SUCCESS_PATH,
+} from "./catalog";
+import { calcTotal, formatMoney } from "./pricing";
+import { applyTheme, getTheme } from "./theme";
+import { useIframeResize } from "./useIframeResize";
+import BagsStep, { emptyPassenger } from "./steps/BagsStep";
+import DocumentsStep from "./steps/DocumentsStep";
+import PickupStep from "./steps/PickupStep";
+import PaymentPage from "./steps/PaymentPage";
+import TimeslotStep from "./steps/TimeslotStep";
+import TripStep from "./steps/TripStep";
+import { clearBooking, loadBooking, saveBooking } from "../config/storage";
+import createBooking, { getCheckout } from "../config/services/booking";
 import {
   anyDocumentUploading,
   documentFieldKey,
@@ -32,50 +40,50 @@ import {
   localIsoDate,
   mediaUrl,
   minFlightDate,
-} from '../utility';
-import { toast } from 'react-toastify';
-import './BookingWidget.css';
-import ReviewBooking from './steps/ReviewBooking';
+} from "../utility";
+import { toast } from "react-toastify";
+import "./BookingWidget.css";
+import ReviewBooking from "./steps/ReviewBooking";
 
 const INITIAL_DATA = {
-  flightType: 'international',
-  cabinClass: 'premium-economy',
-  airport: '',
-  airline: '',
-  airlineLabel: '',
-  airportLabel: '',
-  date: '',
-  time: '',
-  flightNumber: '',
+  flightType: "international",
+  cabinClass: "premium-economy",
+  airport: "",
+  airline: "",
+  airlineLabel: "",
+  airportLabel: "",
+  date: "",
+  time: "",
+  flightNumber: "",
   passengers: 1,
   luggage: 1,
   extras: [],
-  floor: '',
-  address1: '',
-  address2: '',
-  city: '',
-  postalCode: '',
-  country: 'IN',
-  phoneCode: '+91',
-  altPhone: '',
-  altPhoneCode: '+91',
-  firstName: '',
-  lastName: '',
-  email: '',
-  phone: '',
-  notes: '',
+  floor: "",
+  address1: "",
+  address2: "",
+  city: "",
+  postalCode: "",
+  country: "IN",
+  phoneCode: "+91",
+  altPhone: "",
+  altPhoneCode: "+91",
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  notes: "",
   passport: null,
   docs: {},
   bagPassengers: [emptyPassenger()],
-  slotDate: '',
-  slotTime: '',
+  slotDate: "",
+  slotTime: "",
   serviced: null,
-  zone_id: '',
+  zone_id: "",
   pickup_distance_km: null,
   zone_band: null,
   coverageChecking: false,
   weightCheck: null,
-  payment: 'arrival',
+  payment: "arrival",
   terms: false,
 };
 
@@ -86,23 +94,23 @@ function stepFromPath(pathname) {
 function validate(step, data) {
   const errors = {};
   const required = (key, message) => {
-    if (!String(data[key] || '').trim()) errors[key] = message;
+    if (!String(data[key] || "").trim()) errors[key] = message;
   };
 
   if (step === 1) {
-    required('flightType', 'Select a flight type');
-    required('cabinClass', 'Select a cabin class');
-    required('airport', 'Select an airport');
-    required('airline', 'Select an airline');
-    required('flightNumber', 'Enter a flight number');
-    required('email', 'Enter an email');
-    required('date', 'Choose a flight date');
-    required('time', 'Choose a flight time');
+    required("flightType", "Select a flight type");
+    required("cabinClass", "Select a cabin class");
+    required("airport", "Select an airport");
+    required("airline", "Select an airline");
+    required("flightNumber", "Enter a flight number");
+    required("email", "Enter an email");
+    required("date", "Choose a flight date");
+    required("time", "Choose a flight time");
     if (data.date && data.date < minFlightDate()) {
-      errors.date = 'Flight date must be at least 24 hours from now';
+      errors.date = "Flight date must be at least 24 hours from now";
     }
     if (data.email && !isValidEmail(data.email)) {
-      errors.email = 'Enter a valid email';
+      errors.email = "Enter a valid email";
     }
     if (
       data.date &&
@@ -110,25 +118,25 @@ function validate(step, data) {
       !errors.date &&
       !isFlightAtLeast24HoursAhead(data.date, data.time)
     ) {
-      errors.time = 'Flight must be at least 24 hours from now';
+      errors.time = "Flight must be at least 24 hours from now";
     }
-    getVisibleVerificationRules(data).forEach((rule) => {
-      const field = documentFieldKey(rule);
-      const doc = (data.docs || {})[field];
-      const label = documentLabel(rule);
-      if (isFileDocument(rule)) {
-        if (doc?.uploading) {
-          errors[field] = `Please wait for ${label} to finish uploading`;
-        } else if (
-          rule.required &&
-          !(doc?.url || mediaUrl(doc?.media))
-        ) {
-          errors[field] = `Please upload your ${label.toLowerCase()}`;
-        }
-      } else if (rule.required && !String(doc?.value || '').trim()) {
-        errors[field] = `Enter your ${label.toLowerCase()}`;
-      }
-    });
+    // getVisibleVerificationRules(data).forEach((rule) => {
+    //   const field = documentFieldKey(rule);
+    //   const doc = (data.docs || {})[field];
+    //   const label = documentLabel(rule);
+    //   if (isFileDocument(rule)) {
+    //     if (doc?.uploading) {
+    //       errors[field] = `Please wait for ${label} to finish uploading`;
+    //     } else if (
+    //       rule.required &&
+    //       !(doc?.url || mediaUrl(doc?.media))
+    //     ) {
+    //       errors[field] = `Please upload your ${label.toLowerCase()}`;
+    //     }
+    //   } else if (rule.required && !String(doc?.value || '').trim()) {
+    //     errors[field] = `Enter your ${label.toLowerCase()}`;
+    //   }
+    // });
   }
 
   if (step === 2) {
@@ -141,57 +149,60 @@ function validate(step, data) {
       if (isFileDocument(rule)) {
         if (doc?.uploading) {
           errors[field] = `Please wait for ${label} to finish uploading`;
-        } else if (
-          rule.required &&
-          !(doc?.url || mediaUrl(doc?.media))
-        ) {
+        } else if (rule.required && !(doc?.url || mediaUrl(doc?.media))) {
           errors[field] = `Please upload your ${label.toLowerCase()}`;
         }
-      } else if (rule.required && !String(doc?.value || '').trim()) {
+      } else if (rule.required && !String(doc?.value || "").trim()) {
         errors[field] = `Enter your ${label.toLowerCase()}`;
       }
     });
   }
 
   if (step === 3) {
-    required('floor', 'Enter room / apartment / floor');
-    required('address1', 'Enter address line 1');
-    required('address2', 'Enter address line 2');
-    required('city', 'Enter a city');
-    required('postalCode', 'Enter a postal code');
-    required('country', 'Select a country');
-    required('phone', 'Enter a contact number');
-    if (data.phone && !isValidContactNumber(data.phone, data.country)) {
-      errors.phone = 'Enter a valid contact number';
+    required("floor", "Enter room / apartment / floor");
+    required("address1", "Enter address line 1");
+    required("address2", "Enter address line 2");
+    required("city", "Enter a city");
+    required("postalCode", "Enter a postal code");
+    required("country", "Select a country");
+    required("phone", "Enter a contact number");
+
+    if (data.phone && !isValidContactNumber(data.phone, data.phoneCountry)) {
+      errors.phone = "Enter a valid contact number";
     }
-    if (data.altPhone && !isValidContactNumber(data.altPhone, data.country)) {
-      errors.altPhone = 'Enter a valid alternate number';
+
+    if (
+      data.altPhone &&
+      !isValidContactNumber(data.altPhone, data.altPhoneCountry)
+    ) {
+      errors.altPhone = "Enter a valid alternate number";
     }
+
     if (data.serviced === false) {
-      errors.serviced = 'This pickup location is not serviceable';
+      errors.serviced = "This pickup location is not serviceable";
     }
   }
 
   if (step === 4) {
-    required('slotDate', 'Select a pickup date');
+    required("slotDate", "Select a pickup date");
     const today = localIsoDate();
     if (data.slotDate && data.slotDate < today) {
-      errors.slotDate = 'Pickup date must be today or later';
+      errors.slotDate = "Pickup date must be today or later";
     } else if (data.date && data.slotDate && data.slotDate > data.date) {
-      errors.slotDate = 'Pickup date cannot be after the flight date';
+      errors.slotDate = "Pickup date cannot be after the flight date";
     }
-    required('slotTime', 'Select a timeslot');
+    required("slotTime", "Select a timeslot");
   }
 
   if (step === 5) {
     const list = data.bagPassengers || [];
-    if (!list.length) errors.bagPassengers = 'Add at least one passenger';
+    if (!list.length) errors.bagPassengers = "Add at least one passenger";
     list.forEach((passenger, passengerIndex) => {
-      if (!String(passenger.name || '').trim()) {
-        errors[`p-${passengerIndex}-name`] = 'Enter passenger name';
+      if (!String(passenger.name || "").trim()) {
+        errors[`p-${passengerIndex}-name`] = "Enter passenger name";
       }
       if (!passenger.bags?.length) {
-        errors[`p-${passengerIndex}-bags`] = 'Add at least one bag';
+        errors[`p-${passengerIndex}-bags`] = "Add at least one bag";
       } else {
         const bagsAllowed =
           data.weightCheck?.per_passenger?.checked_bags_allowed;
@@ -201,16 +212,15 @@ function validate(step, data) {
         }
       }
       (passenger.bags || []).forEach((bag, bagIndex) => {
-        if (!String(bag.name || '').trim()) {
-          errors[`p-${passengerIndex}-b-${bagIndex}-name`] = 'Enter bag name';
+        if (!String(bag.name || "").trim()) {
+          errors[`p-${passengerIndex}-b-${bagIndex}-name`] = "Enter bag name";
         }
         if (!bag.size) {
-          errors[`p-${passengerIndex}-b-${bagIndex}-size`] = 'Select bag size';
+          errors[`p-${passengerIndex}-b-${bagIndex}-size`] = "Select bag size";
         }
-        const maxKg =
-          data.weightCheck?.per_passenger?.max_weight_kg_per_bag;
-        if (!String(bag.weight || '').trim()) {
-          errors[`p-${passengerIndex}-b-${bagIndex}-weight`] = 'Enter weight';
+        const maxKg = data.weightCheck?.per_passenger?.max_weight_kg_per_bag;
+        if (!String(bag.weight || "").trim()) {
+          errors[`p-${passengerIndex}-b-${bagIndex}-weight`] = "Enter weight";
         } else if (maxKg != null && Number(bag.weight) > Number(maxKg)) {
           errors[`p-${passengerIndex}-b-${bagIndex}-weight`] =
             `Weight cannot be more than ${maxKg} kg`;
@@ -256,18 +266,17 @@ function SuccessPage() {
   const cabin = CABIN_CLASSES.find((item) => item.id === data.cabinClass);
   const amount = paymentSession?.checkout?.total_price;
   const currency = String(
-    paymentSession?.checkout?.currency || 'USD',
+    paymentSession?.checkout?.currency || "USD",
   ).toUpperCase();
-  const checkoutCode =
-    paymentSession?.checkout?.checkout_code || bookingRef;
+  const checkoutCode = paymentSession?.checkout?.checkout_code || bookingRef;
 
   useEffect(() => {
-    window.history.pushState(null, '', window.location.href);
+    window.history.pushState(null, "", window.location.href);
     const blockBack = () => {
-      window.history.pushState(null, '', window.location.href);
+      window.history.pushState(null, "", window.location.href);
     };
-    window.addEventListener('popstate', blockBack);
-    return () => window.removeEventListener('popstate', blockBack);
+    window.addEventListener("popstate", blockBack);
+    return () => window.removeEventListener("popstate", blockBack);
   }, []);
 
   if (!bookingRef) {
@@ -302,7 +311,9 @@ function SuccessPage() {
         <div className="review-row">
           <span>Flight</span>
           <strong>
-            {[data.flightNumber, data.date, data.time].filter(Boolean).join(' · ')}
+            {[data.flightNumber, data.date, data.time]
+              .filter(Boolean)
+              .join(" · ")}
           </strong>
         </div>
         <div className="review-row">
@@ -314,14 +325,14 @@ function SuccessPage() {
           <strong>
             {[data.slotDate, data.slot_label || data.slotTime]
               .filter(Boolean)
-              .join(' · ')}
+              .join(" · ")}
           </strong>
         </div>
         <div className="review-row">
           <span>Pickup address</span>
           <strong>{formatPickupAddress(data)}</strong>
         </div>
-        {amount != null && amount !== '' ? (
+        {amount != null && amount !== "" ? (
           <div className="review-row">
             <span>Amount paid</span>
             <strong>{formatMoney(amount, currency)}</strong>
@@ -347,10 +358,10 @@ function BookingLayout() {
   }));
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [bookingRef, setBookingRef] = useState('');
-  const [submitError, setSubmitError] = useState('');
+  const [bookingRef, setBookingRef] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [paymentSession, setPaymentSession] = useState(null);
-  const [payError, setPayError] = useState('');
+  const [payError, setPayError] = useState("");
 
   const step = stepFromPath(pathname);
   const isSuccess = pathname === SUCCESS_PATH;
@@ -397,7 +408,7 @@ function BookingLayout() {
       Object.keys(patch).forEach((key) => delete next[key]);
       if (patch.bagPassengers) {
         Object.keys(next).forEach((key) => {
-          if (key.startsWith('p-')) delete next[key];
+          if (key.startsWith("p-")) delete next[key];
         });
       }
       return next;
@@ -407,12 +418,11 @@ function BookingLayout() {
   const goNext = async () => {
     if (isReview) {
       setSubmitting(true);
-      setSubmitError('');
+      setSubmitError("");
       try {
         const response = await createBooking(data);
         if (response.ok === false) {
-          const message =
-            response.message || 'Could not create this booking';
+          const message = response.message || "Could not create this booking";
           setSubmitError(message);
           toast.error(message);
           return;
@@ -428,18 +438,18 @@ function BookingLayout() {
         setBookingRef(reference);
         if (clientSecret && publishableKey) {
           setPaymentSession(response);
-          setPayError('');
+          setPayError("");
           navigate(PAYMENT_PATH);
           return;
         }
         navigate(SUCCESS_PATH, { replace: true });
         window.parent.postMessage(
-          { source: 'sp-whitelabel', type: 'booked', reference, total },
-          '*',
+          { source: "sp-whitelabel", type: "booked", reference, total },
+          "*",
         );
       } catch (error) {
         const message =
-          error.response?.data?.message || 'Could not create this booking';
+          error.response?.data?.message || "Could not create this booking";
         setSubmitError(message);
         toast.error(message);
       } finally {
@@ -454,19 +464,19 @@ function BookingLayout() {
 
     if (fromReview) {
       navigate(REVIEW_PATH);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
     if (step < 5) {
       const nextStep = STEPS.find((item) => item.id === step + 1);
       navigate(nextStep.path);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
     navigate(REVIEW_PATH);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const onPaid = async (paymentIntent) => {
@@ -488,7 +498,7 @@ function BookingLayout() {
       } catch (error) {
         const message =
           error.response?.data?.message ||
-          'Payment succeeded but checkout could not be confirmed';
+          "Payment succeeded but checkout could not be confirmed";
         setPayError(message);
         toast.error(message);
         return;
@@ -502,13 +512,13 @@ function BookingLayout() {
     navigate(SUCCESS_PATH, { replace: true });
     window.parent.postMessage(
       {
-        source: 'sp-whitelabel',
-        type: 'booked',
+        source: "sp-whitelabel",
+        type: "booked",
         reference,
         total: paymentSession?.checkout?.total_price ?? total,
         payment_intent_id: paymentIntent?.id,
       },
-      '*',
+      "*",
     );
   };
 
@@ -516,8 +526,8 @@ function BookingLayout() {
     clearBooking();
     setData(INITIAL_DATA);
     setErrors({});
-    setBookingRef('');
-    setSubmitError('');
+    setBookingRef("");
+    setSubmitError("");
     setPaymentSession(null);
     navigate(STEPS[0].path, { replace: true });
   };
@@ -530,7 +540,11 @@ function BookingLayout() {
             <li
               key={item.id}
               className={
-                item.id === step ? 'is-current' : item.id < step ? 'is-done' : ''
+                item.id === step
+                  ? "is-current"
+                  : item.id < step
+                    ? "is-done"
+                    : ""
               }
             >
               <button
@@ -543,7 +557,7 @@ function BookingLayout() {
                   })
                 }
               >
-                <span>{item.id < step ? '✓' : item.id}</span>
+                <span>{item.id < step ? "✓" : item.id}</span>
                 {item.label}
               </button>
             </li>
@@ -575,14 +589,16 @@ function BookingLayout() {
       {!isSuccess && !isPayment && (
         <footer
           className={`widget-footer${
-            step === 1 && !isReview && !fromReview ? ' is-single' : ''
+            step === 1 && !isReview && !fromReview ? " is-single" : ""
           }`}
         >
           {(step > 1 || isReview || fromReview) && (
             <button
               type="button"
               className="btn-ghost"
-              disabled={(step === 1 || step === 2) && anyDocumentUploading(data)}
+              disabled={
+                (step === 1 || step === 2) && anyDocumentUploading(data)
+              }
               onClick={() => {
                 if (isReview || fromReview) {
                   navigate(REVIEW_PATH);
@@ -599,23 +615,23 @@ function BookingLayout() {
             type="button"
             className="btn-primary"
             onClick={goNext}
-              disabled={
-                submitting ||
-                ((step === 1 || step === 2) && anyDocumentUploading(data)) ||
-                (step === 3 && (data.coverageChecking || data.serviced === false))
-              }
+            disabled={
+              submitting ||
+              ((step === 1 || step === 2) && anyDocumentUploading(data)) ||
+              (step === 3 && (data.coverageChecking || data.serviced === false))
+            }
           >
             {anyDocumentUploading(data) && (step === 1 || step === 2)
-              ? 'Uploading…'
+              ? "Uploading…"
               : submitting
-                ? 'Sending…'
+                ? "Sending…"
                 : isReview
-                  ? 'Confirm booking'
+                  ? "Confirm booking"
                   : fromReview
-                    ? 'Save & review'
+                    ? "Save & review"
                     : step === 5
-                      ? 'Review Booking'
-                      : 'Continue'}
+                      ? "Review Booking"
+                      : "Continue"}
           </button>
         </footer>
       )}

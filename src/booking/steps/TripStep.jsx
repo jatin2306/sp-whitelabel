@@ -225,7 +225,7 @@ export default function TripStep({ data, errors, onChange }) {
                 d="M12 8v5l3 2"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.8"
+                strokeWidth="1.8"r
               />
             </svg>
           </div>
@@ -241,8 +241,8 @@ export default function TripStep({ data, errors, onChange }) {
         </Field>
       </div>
 
-      <h3 className="subhead">Required documents</h3>
-      <VerificationFields data={data} errors={errors} onChange={onChange} />
+      {/* <h3 className="subhead">Required documents</h3>
+      <VerificationFields data={data} errors={errors} onChange={onChange} /> */}
     </div>
   );
 }

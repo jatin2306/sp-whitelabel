@@ -1,7 +1,7 @@
 export function sortAz(items, getLabel = (item) => item.label) {
   return [...items].sort((left, right) =>
-    String(getLabel(left)).localeCompare(String(getLabel(right)), 'en', {
-      sensitivity: 'base',
+    String(getLabel(left)).localeCompare(String(getLabel(right)), "en", {
+      sensitivity: "base",
     }),
   );
 }
@@ -22,7 +22,8 @@ export function mapAirlineDropdownOptions(airlines) {
     airline_id: airline.airline_id,
     name: airline.name,
     iata_code: airline.iata_code,
-    verification_rules_by_flight_type: airline.verification_rules_by_flight_type,
+    verification_rules_by_flight_type:
+      airline.verification_rules_by_flight_type,
   }));
 
   return sortAz(options, (item) => item.label);
@@ -42,8 +43,8 @@ export function mapTimeslotOptions(time_slots) {
 
 export function localIsoDate(date = new Date()) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -61,28 +62,36 @@ export function isFlightAtLeast24HoursAhead(date, time) {
 }
 
 export function isValidContactNumber(value, countryId) {
-  const digits = String(value || '').replace(/\D/g, '');
-  if (countryId === 'IN') return /^[6-9]\d{9}$/.test(digits);
+  let digits = String(value || "").replace(/\D/g, "");
+
+  if (countryId === "IN") {
+    if (digits.startsWith("91")) {
+      digits = digits.slice(2);
+    }
+
+    return /^[6-9]\d{9}$/.test(digits);
+  }
+
   return /^\d{7,15}$/.test(digits);
 }
 
 export function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
 export function mediaUrl(media) {
-  if (!media) return '';
-  if (typeof media === 'string') {
-    return /^https?:\/\//i.test(media) ? media : '';
+  if (!media) return "";
+  if (typeof media === "string") {
+    return /^https?:\/\//i.test(media) ? media : "";
   }
 
   const seen = new Set();
   const visit = (value) => {
-    if (!value || seen.has(value)) return '';
-    if (typeof value === 'string') {
-      return /^https?:\/\//i.test(value) ? value : '';
+    if (!value || seen.has(value)) return "";
+    if (typeof value === "string") {
+      return /^https?:\/\//i.test(value) ? value : "";
     }
-    if (typeof value !== 'object') return '';
+    if (typeof value !== "object") return "";
     seen.add(value);
 
     const preferred = [
@@ -115,51 +124,61 @@ export function mediaUrl(media) {
       const found = visit(nested);
       if (found) return found;
     }
-    return '';
+    return "";
   };
 
   return visit(media);
 }
 
 export function contactDigits(code, number) {
-  const dial = String(code || '').replace(/\D/g, '');
-  const local = String(number || '').replace(/\D/g, '');
-  if (!dial && !local) return '';
-  return `+${dial}${local}`;
+  const dial = String(code || "").replace(/\D/g, "");
+  const digits = String(number || "").replace(/\D/g, "");
+
+  if (!digits) return "";
+
+  if (dial && digits.startsWith(dial)) {
+    return `+${digits}`;
+  }
+
+  return `+${dial}${digits}`;
 }
 
 export const DOC_LABELS = {
-  passport: 'Passport',
-  boarding_pass: 'Boarding pass',
-  national_id: 'National ID',
+  passport: "Passport",
+  boarding_pass: "Boarding pass",
+  national_id: "National ID",
 };
 
 export function documentFieldKey(rule) {
-  return String(rule?.ui_field || rule?.rule_type || '')
+  return String(rule?.ui_field || rule?.rule_type || "")
     .toLowerCase()
-    .replace(/-/g, '_');
+    .replace(/-/g, "_");
 }
 
 export function getVerificationRules(data) {
-  const key = String(data?.flightType || '').toUpperCase();
+  const key = String(data?.flightType || "").toUpperCase();
   const rules = data?.verification_rules_by_flight_type?.[key];
   return Array.isArray(rules) ? rules : [];
 }
 
 export function getVisibleVerificationRules(data) {
   return getVerificationRules(data).filter(
-    (rule) => documentFieldKey(rule) !== 'boarding_pass',
+    (rule) => documentFieldKey(rule) !== "boarding_pass",
   );
 }
 
 export function isFileDocument(rule) {
   const field = documentFieldKey(rule);
-  return field === 'passport' || field === 'boarding_pass';
+  return (
+    field === "passport" || field === "boarding_pass" || field === "national_id"
+  );
 }
 
 export function documentLabel(rule) {
   const field = documentFieldKey(rule);
-  return DOC_LABELS[field] || String(rule?.rule_type || field).replace(/_/g, ' ');
+  return (
+    DOC_LABELS[field] || String(rule?.rule_type || field).replace(/_/g, " ")
+  );
 }
 
 export function anyDocumentUploading(data) {

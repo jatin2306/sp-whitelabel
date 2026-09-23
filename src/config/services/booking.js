@@ -1,46 +1,76 @@
-import API from '../endpoint';
-import axiosInstance from '../axiosInstance';
-import { BAG_SIZES, CABIN_CLASSES, formatPickupAddress } from '../../booking/catalog';
-import { contactDigits, mediaUrl } from '../../utility';
+import API from "../endpoint";
+import axiosInstance from "../axiosInstance";
+import {
+  BAG_SIZES,
+  CABIN_CLASSES,
+  formatPickupAddress,
+} from "../../booking/catalog";
+import { contactDigits, mediaUrl } from "../../utility";
 
 export function buildBookingPayload(data) {
   const cabin = CABIN_CLASSES.find((item) => item.id === data.cabinClass);
+
   const bagSize = (id) => BAG_SIZES.find((item) => item.id === id)?.name || id;
+
   const passportUrl =
     data.docs?.passport?.url ||
     mediaUrl(data.docs?.passport?.media) ||
     data.passport?.url ||
     mediaUrl(data.passport?.media);
+
   const boardingPassUrl =
     data.docs?.boarding_pass?.url ||
     mediaUrl(data.docs?.boarding_pass?.media) ||
     data.boardingPass?.url ||
     mediaUrl(data.boardingPass?.media);
+
+  const nationalIdUrl =
+    data.docs?.national_id?.url ||
+    mediaUrl(data.docs?.national_id?.media) ||
+    data.nationalId?.url ||
+    mediaUrl(data.nationalId?.media);
+
   const verification_documents = {
     passport: passportUrl,
   };
+
   if (boardingPassUrl) {
     verification_documents.boarding_pass = boardingPassUrl;
   }
 
+  if (nationalIdUrl) {
+    verification_documents.national_id = nationalIdUrl;
+  }
+
   const payload = {
-    email: String(data.email || '').trim(),
-    service_type: 'DEPARTURE',
+    email: String(data.email || "").trim(),
+
+    service_type: "DEPARTURE",
+
     airline_id: data.airline,
+
     airport_id: data.airport,
-    flight_type: String(data.flightType || '').toUpperCase(),
+
+    flight_type: String(data.flightType || "").toUpperCase(),
+
     cabin_class: cabin?.name,
+
     verification_documents,
+
     flight_date: data.date,
-    flight_time: String(data.time || '').slice(0, 5),
-    flight_number: String(data.flightNumber || '').trim(),
+
+    flight_time: String(data.time || "").slice(0, 5),
+
+    flight_number: String(data.flightNumber || "").trim(),
+
     pickup: {
-      type: 'CURRENT_LOCATION',
-      label: data.address1 || data.city || 'Pickup',
+      type: "CURRENT_LOCATION",
+      label: data.address1 || data.city || "Pickup",
       address: formatPickupAddress(data),
       lat: data.latitude,
       lng: data.longitude,
     },
+
     pickup_contact: {
       room: data.floor,
       address_line_1: data.address1,
@@ -50,17 +80,22 @@ export function buildBookingPayload(data) {
       country: data.country,
       contact_no: contactDigits(data.phoneCode, data.phone),
     },
+
     pickup_date: data.slotDate,
+
     pickup_time_window_key: data.slot_key || data.slotTime,
+
     passengers: (data.bagPassengers || []).map((passenger) => ({
-      full_name: String(passenger.name || '').trim(),
+      full_name: String(passenger.name || "").trim(),
+
       bags: (passenger.bags || []).map((bag) => ({
         bag_size: bagSize(bag.size),
         weight_kg: Number(bag.weight),
-        bag_name: String(bag.name || '').trim(),
-        photo_urls: [
-          bag.photo?.url || mediaUrl(bag.photo?.media),
-        ].filter(Boolean),
+        bag_name: String(bag.name || "").trim(),
+
+        photo_urls: [bag.photo?.url || mediaUrl(bag.photo?.media)].filter(
+          Boolean,
+        ),
       })),
     })),
   };
@@ -80,13 +115,13 @@ const createBooking = async (data) => {
     API.createBooking,
     buildBookingPayload(data),
   );
+
   return response.data;
 };
 
 export const getCheckout = async (checkoutId) => {
-  const response = await axiosInstance.get(
-    `${API.getCheckout}/${checkoutId}`,
-  );
+  const response = await axiosInstance.get(`${API.getCheckout}/${checkoutId}`);
+
   return response.data;
 };
 
