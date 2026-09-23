@@ -8,18 +8,18 @@ import {
   useNavigate,
   useOutletContext,
 } from 'react-router-dom';
-import { airportLabel, REVIEW_PATH, STEPS, SUCCESS_PATH } from './catalog';
+import { airportLabel, CABIN_CLASSES, formatPickupAddress, PAYMENT_PATH, REVIEW_PATH, STEPS, SUCCESS_PATH } from './catalog';
 import { calcTotal, formatMoney } from './pricing';
 import { applyTheme, getTheme } from './theme';
 import { useIframeResize } from './useIframeResize';
 import BagsStep, { emptyPassenger } from './steps/BagsStep';
 import DocumentsStep from './steps/DocumentsStep';
 import PickupStep from './steps/PickupStep';
-import ReviewBooking from './steps/ReviewBooking';
+import PaymentPage from './steps/PaymentPage';
 import TimeslotStep from './steps/TimeslotStep';
 import TripStep from './steps/TripStep';
 import { clearBooking, loadBooking, saveBooking } from '../config/storage';
-import createBooking from '../config/services/booking';
+import createBooking, { getCheckout } from '../config/services/booking';
 import {
   anyDocumentUploading,
   documentFieldKey,
@@ -35,6 +35,7 @@ import {
 } from '../utility';
 import { toast } from 'react-toastify';
 import './BookingWidget.css';
+import ReviewBooking from './steps/ReviewBooking';
 
 const INITIAL_DATA = {
   flightType: 'international',
@@ -225,6 +226,21 @@ function isStepComplete(step, data) {
   return Object.keys(validate(step, data)).length === 0;
 }
 
+function PaymentRoute() {
+  const { paymentSession, payError, onPaid, onPayError } = useOutletContext();
+  if (!paymentSession?.payment?.client_secret) {
+    return <Navigate to={REVIEW_PATH} replace />;
+  }
+  return (
+    <PaymentPage
+      paymentSession={paymentSession}
+      error={payError}
+      onPaid={onPaid}
+      onError={onPayError}
+    />
+  );
+}
+
 function ReviewPage() {
   const { data, submitError } = useOutletContext();
   return <ReviewBooking data={data} submitError={submitError} />;
@@ -236,7 +252,23 @@ function StepPage({ Step }) {
 }
 
 function SuccessPage() {
-  const { data, theme, bookingRef, total, reset } = useOutletContext();
+  const { data, bookingRef, reset, paymentSession } = useOutletContext();
+  const cabin = CABIN_CLASSES.find((item) => item.id === data.cabinClass);
+  const amount = paymentSession?.checkout?.total_price;
+  const currency = String(
+    paymentSession?.checkout?.currency || 'USD',
+  ).toUpperCase();
+  const checkoutCode =
+    paymentSession?.checkout?.checkout_code || bookingRef;
+
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.href);
+    const blockBack = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', blockBack);
+    return () => window.removeEventListener('popstate', blockBack);
+  }, []);
 
   if (!bookingRef) {
     return <Navigate to={STEPS[0].path} replace />;
@@ -244,22 +276,59 @@ function SuccessPage() {
 
   return (
     <div className="success">
-      <div className="success-mark">✓</div>
-      <h2>Pickup scheduled</h2>
-      <p>
-        {theme.company} has received this departure pickup. A confirmation will
-        be sent to {data.email || `${data.phoneCode} ${data.phone}`}.
-      </p>
-      <div className="booking-ref">
-        Reference <strong>{bookingRef}</strong>
+      <div className="success-hero">
+        <div className="success-mark">✓</div>
+        <h2>Booking successfully created</h2>
+        <p>Your pickup has been confirmed.</p>
       </div>
-      <ul className="success-facts">
-        <li>{airportLabel(data.airport)}</li>
-        <li>
-          {data.airline} · {data.slotDate} · {data.slotTime}
-        </li>
-        <li>{formatMoney(total, theme.currency)}</li>
-      </ul>
+
+      <div className="success-details">
+        <div className="review-row">
+          <span>Reference</span>
+          <strong>{checkoutCode}</strong>
+        </div>
+        <div className="review-row">
+          <span>Email</span>
+          <strong>{data.email}</strong>
+        </div>
+        <div className="review-row">
+          <span>Airport</span>
+          <strong>{data.airportLabel || airportLabel(data.airport)}</strong>
+        </div>
+        <div className="review-row">
+          <span>Airline</span>
+          <strong>{data.airlineLabel || data.airline}</strong>
+        </div>
+        <div className="review-row">
+          <span>Flight</span>
+          <strong>
+            {[data.flightNumber, data.date, data.time].filter(Boolean).join(' · ')}
+          </strong>
+        </div>
+        <div className="review-row">
+          <span>Cabin</span>
+          <strong>{cabin?.name}</strong>
+        </div>
+        <div className="review-row">
+          <span>Pickup date</span>
+          <strong>
+            {[data.slotDate, data.slot_label || data.slotTime]
+              .filter(Boolean)
+              .join(' · ')}
+          </strong>
+        </div>
+        <div className="review-row">
+          <span>Pickup address</span>
+          <strong>{formatPickupAddress(data)}</strong>
+        </div>
+        {amount != null && amount !== '' ? (
+          <div className="review-row">
+            <span>Amount paid</span>
+            <strong>{formatMoney(amount, currency)}</strong>
+          </div>
+        ) : null}
+      </div>
+
       <button type="button" className="btn-secondary" onClick={reset}>
         Book another pickup
       </button>
@@ -280,10 +349,13 @@ function BookingLayout() {
   const [submitting, setSubmitting] = useState(false);
   const [bookingRef, setBookingRef] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [paymentSession, setPaymentSession] = useState(null);
+  const [payError, setPayError] = useState('');
 
   const step = stepFromPath(pathname);
   const isSuccess = pathname === SUCCESS_PATH;
   const isReview = pathname === REVIEW_PATH;
+  const isPayment = pathname === PAYMENT_PATH;
   const total = calcTotal(data);
 
   useIframeResize([
@@ -306,7 +378,7 @@ function BookingLayout() {
   }, [data]);
 
   useEffect(() => {
-    if (!step || isSuccess || isReview) return;
+    if (!step || isSuccess || isReview || isPayment) return;
     const stepOneOpen = !isStepComplete(1, data);
     const stepTwoOpen = !isStepComplete(2, data);
     if (step > 1 && stepOneOpen) {
@@ -345,13 +417,22 @@ function BookingLayout() {
           toast.error(message);
           return;
         }
+        const clientSecret = response.payment?.client_secret;
+        const publishableKey = response.publishable_key;
         const reference =
+          response.checkout?.checkout_code ||
           response.booking_id ||
-          response.reference ||
           response.booking?.booking_id ||
+          response.payment?.payment_id ||
           `SP-${Math.floor(100000 + Math.random() * 900000)}`;
         setBookingRef(reference);
-        navigate(SUCCESS_PATH);
+        if (clientSecret && publishableKey) {
+          setPaymentSession(response);
+          setPayError('');
+          navigate(PAYMENT_PATH);
+          return;
+        }
+        navigate(SUCCESS_PATH, { replace: true });
         window.parent.postMessage(
           { source: 'sp-whitelabel', type: 'booked', reference, total },
           '*',
@@ -388,18 +469,62 @@ function BookingLayout() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const onPaid = async (paymentIntent) => {
+    const checkoutId =
+      paymentSession?.checkout?.id ||
+      paymentSession?.checkout?._id ||
+      paymentSession?.checkout?.checkout_id;
+    if (checkoutId) {
+      try {
+        const checkoutResponse = await getCheckout(checkoutId);
+        if (checkoutResponse?.checkout) {
+          setPaymentSession((current) => ({
+            ...current,
+            ...checkoutResponse,
+            payment: current?.payment,
+            publishable_key: current?.publishable_key,
+          }));
+        }
+      } catch (error) {
+        const message =
+          error.response?.data?.message ||
+          'Payment succeeded but checkout could not be confirmed';
+        setPayError(message);
+        toast.error(message);
+        return;
+      }
+    }
+    const reference =
+      paymentSession?.checkout?.checkout_code ||
+      paymentSession?.checkout?.booking_code ||
+      bookingRef;
+    setBookingRef(reference);
+    navigate(SUCCESS_PATH, { replace: true });
+    window.parent.postMessage(
+      {
+        source: 'sp-whitelabel',
+        type: 'booked',
+        reference,
+        total: paymentSession?.checkout?.total_price ?? total,
+        payment_intent_id: paymentIntent?.id,
+      },
+      '*',
+    );
+  };
+
   const reset = () => {
     clearBooking();
     setData(INITIAL_DATA);
     setErrors({});
     setBookingRef('');
     setSubmitError('');
-    navigate(STEPS[0].path);
+    setPaymentSession(null);
+    navigate(STEPS[0].path, { replace: true });
   };
 
   return (
     <div className="widget">
-      {!isSuccess && !isReview && (
+      {!isSuccess && !isReview && !isPayment && (
         <ol className="stepper" aria-label="Booking steps">
           {STEPS.map((item) => (
             <li
@@ -436,11 +561,18 @@ function BookingLayout() {
             total,
             reset,
             submitError,
+            paymentSession,
+            payError,
+            onPaid,
+            onPayError: (message) => {
+              setPayError(message);
+              if (message) toast.error(message);
+            },
           }}
         />
       </main>
 
-      {!isSuccess && (
+      {!isSuccess && !isPayment && (
         <footer
           className={`widget-footer${
             step === 1 && !isReview && !fromReview ? ' is-single' : ''
@@ -502,6 +634,7 @@ export default function BookingWidget() {
         <Route path="timeslot" element={<StepPage Step={TimeslotStep} />} />
         <Route path="bags" element={<StepPage Step={BagsStep} />} />
         <Route path="review" element={<ReviewPage />} />
+        <Route path="pay" element={<PaymentRoute />} />
         <Route path="success" element={<SuccessPage />} />
       </Route>
       <Route path="*" element={<Navigate to={STEPS[0].path} replace />} />

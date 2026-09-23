@@ -83,4 +83,11 @@ const createBooking = async (data) => {
   return response.data;
 };
 
+export const getCheckout = async (checkoutId) => {
+  const response = await axiosInstance.get(
+    `${API.getCheckout}/${checkoutId}`,
+  );
+  return response.data;
+};
+
 export default createBooking;

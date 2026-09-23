@@ -6,6 +6,7 @@ const API = {
   getPickupCoverage: '/zones/pickup-coverage',
   checkWeight: '/bookings/check-weight',
   createBooking: '/bookings',
+  getCheckout: '/bookings/checkout',
 };
 
 export default API;

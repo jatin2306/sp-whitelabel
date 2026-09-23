@@ -164,3 +164,4 @@ export const STEPS = [
 
 export const SUCCESS_PATH = '/success';
 export const REVIEW_PATH = '/review';
+export const PAYMENT_PATH = '/pay';
