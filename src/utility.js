@@ -122,7 +122,10 @@ export function mediaUrl(media) {
 }
 
 export function contactDigits(code, number) {
-  return `${String(code || '').replace(/\D/g, '')}${String(number || '').replace(/\D/g, '')}`;
+  const dial = String(code || '').replace(/\D/g, '');
+  const local = String(number || '').replace(/\D/g, '');
+  if (!dial && !local) return '';
+  return `+${dial}${local}`;
 }
 
 export const DOC_LABELS = {
