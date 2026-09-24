@@ -171,8 +171,15 @@ function validate(step, data) {
       errors.phone = "Enter a valid contact number";
     }
 
+    const altPhoneDigits = (data.altPhone || "").replace(/\D/g, "");
+    const altPhoneCodeDigits = (data.altPhoneCode || "").replace(/\D/g, "");
+
+    const actualAltPhoneDigits = altPhoneDigits.startsWith(altPhoneCodeDigits)
+      ? altPhoneDigits.slice(altPhoneCodeDigits.length)
+      : altPhoneDigits;
+
     if (
-      data.altPhone &&
+      actualAltPhoneDigits.length > 0 &&
       !isValidContactNumber(data.altPhone, data.altPhoneCountry)
     ) {
       errors.altPhone = "Enter a valid alternate number";
