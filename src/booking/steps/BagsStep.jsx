@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import Dropdown from "../Dropdown";
 import { Field } from "../ui";
 import { BAG_SIZES, CABIN_CLASSES } from "../catalog";
 import uploadMedia from "../../config/services/media";
-import { mediaUrl } from "../../utility";
+import { bagPhotoList, mediaUrl } from "../../utility";
 import checkWeight from "../../config/services/checkWeight";
 
 function nextId(prefix) {
@@ -10,15 +11,69 @@ function nextId(prefix) {
 }
 
 export function emptyBag() {
-  return { id: nextId("bag"), name: "", size: "", weight: "", photo: null };
+  return { id: nextId("bag"), name: "", size: "", weight: "", photos: [] };
 }
 
 export function emptyPassenger() {
-  return { id: nextId("pax"), name: "", bags: [emptyBag()] };
+  return { id: nextId("pax"), name: "", passport: null, bags: [emptyBag()] };
 }
 
 function isImage(file) {
   return file && file.type.startsWith("image/");
+}
+
+function BagPhotos({ photos, error, onAdd, onRemove }) {
+  const inputRef = useRef(null);
+  const uploading = photos.some((photo) => photo.uploading);
+
+  return (
+    <div className="field">
+      <span className="field-label">Upload photos</span>
+      {photos.length > 0 ? (
+        <ul className="bag-photos">
+          {photos.map((photo) => (
+            <li key={photo.id} className="bag-photo">
+              {photo.preview || photo.url ? (
+                <img src={photo.preview || photo.url} alt="" />
+              ) : (
+                <span className="bag-photo-fallback">Photo</span>
+              )}
+              <span>
+                {photo.uploading ? "Uploading…" : photo.error || photo.name}
+              </span>
+              <button
+                type="button"
+                className="text-remove"
+                onClick={() => onRemove(photo.id)}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <button
+        type="button"
+        className="btn-add"
+        disabled={uploading}
+        onClick={() => inputRef.current?.click()}
+      >
+        + Add photo
+      </button>
+      {error ? <span className="field-error">{error}</span> : null}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(event) => {
+          onAdd(event.target.files);
+          event.target.value = "";
+        }}
+      />
+    </div>
+  );
 }
 
 export default function BagsStep({ data, errors, onChange }) {
@@ -59,11 +114,17 @@ export default function BagsStep({ data, errors, onChange }) {
     };
   }, [data.airline, data.flightType, data.cabinClass, passengers.length]);
 
-  const setPassengers = (bagPassengers) => onChange({ bagPassengers });
+  const passengersRef = useRef(passengers);
+  passengersRef.current = passengers;
+
+  const commitPassengers = (next) => {
+    passengersRef.current = next;
+    onChange({ bagPassengers: next });
+  };
 
   const updatePassenger = (index, patch) => {
-    setPassengers(
-      passengers.map((passenger, current) =>
+    commitPassengers(
+      passengersRef.current.map((passenger, current) =>
         current === index ? { ...passenger, ...patch } : passenger,
       ),
     );
@@ -71,53 +132,83 @@ export default function BagsStep({ data, errors, onChange }) {
 
   const updateBag = (passengerIndex, bagIndex, patch) => {
     updatePassenger(passengerIndex, {
-      bags: passengers[passengerIndex].bags.map((bag, current) =>
+      bags: passengersRef.current[passengerIndex].bags.map((bag, current) =>
         current === bagIndex ? { ...bag, ...patch } : bag,
       ),
     });
   };
 
-  const setPhoto = async (passengerIndex, bagIndex, file) => {
-    if (!file || !isImage(file)) return;
-    const current = passengers[passengerIndex].bags[bagIndex].photo;
-    if (current?.preview) URL.revokeObjectURL(current.preview);
-    const preview = URL.createObjectURL(file);
-    updateBag(passengerIndex, bagIndex, {
+  const writePhotos = (passengerIndex, bagIndex, photos) => {
+    updateBag(passengerIndex, bagIndex, { photos, photo: null });
+  };
+
+  const addPhotos = async (passengerIndex, bagIndex, fileList) => {
+    const files = [...fileList].filter(isImage);
+    if (!files.length) return;
+    const bag = passengersRef.current[passengerIndex].bags[bagIndex];
+    const created = files.map((file) => ({
+      file,
       photo: {
+        id: nextId("photo"),
         name: file.name,
         type: file.type,
-        preview,
+        preview: URL.createObjectURL(file),
         uploading: true,
         media: null,
+        url: "",
         error: null,
       },
-    });
-    try {
-      const media = await uploadMedia(file);
-      const url = media.url || mediaUrl(media);
-      updateBag(passengerIndex, bagIndex, {
-        photo: {
-          name: file.name,
-          type: file.type,
-          preview,
-          uploading: false,
-          media,
-          url,
-          error: url ? null : "Could not read uploaded file URL",
-        },
-      });
-    } catch {
-      updateBag(passengerIndex, bagIndex, {
-        photo: {
-          name: file.name,
-          type: file.type,
-          preview,
-          uploading: false,
-          media: null,
-          error: "Could not upload photo",
-        },
-      });
-    }
+    }));
+    writePhotos(passengerIndex, bagIndex, [
+      ...bagPhotoList(bag),
+      ...created.map((item) => item.photo),
+    ]);
+
+    await Promise.all(
+      created.map(async ({ file, photo }) => {
+        const finish = (patch) => {
+          const latest = bagPhotoList(
+            passengersRef.current[passengerIndex].bags[bagIndex],
+          );
+          writePhotos(
+            passengerIndex,
+            bagIndex,
+            latest.map((item) =>
+              item.id === photo.id ? { ...item, ...patch } : item,
+            ),
+          );
+        };
+        try {
+          const media = await uploadMedia(file);
+          const url = media.url || mediaUrl(media);
+          finish({
+            uploading: false,
+            media,
+            url,
+            error: url ? null : "Could not read uploaded file URL",
+          });
+        } catch {
+          finish({
+            uploading: false,
+            media: null,
+            error: "Could not upload photo",
+          });
+        }
+      }),
+    );
+  };
+
+  const removePhoto = (passengerIndex, bagIndex, photoId) => {
+    const latest = bagPhotoList(
+      passengersRef.current[passengerIndex].bags[bagIndex],
+    );
+    const removed = latest.find((item) => item.id === photoId);
+    if (removed?.preview) URL.revokeObjectURL(removed.preview);
+    writePhotos(
+      passengerIndex,
+      bagIndex,
+      latest.filter((item) => item.id !== photoId),
+    );
   };
 
   return (
@@ -137,21 +228,6 @@ export default function BagsStep({ data, errors, onChange }) {
         <section key={passenger.id} className="passenger-card">
           <div className="passenger-card-head">
             <h3>Passenger {passengerIndex + 1}</h3>
-            {passengers.length > 1 && (
-              <button
-                type="button"
-                className="text-remove"
-                onClick={() =>
-                  setPassengers(
-                    passengers.filter(
-                      (_, current) => current !== passengerIndex,
-                    ),
-                  )
-                }
-              >
-                Remove
-              </button>
-            )}
           </div>
 
           <Field
@@ -206,21 +282,16 @@ export default function BagsStep({ data, errors, onChange }) {
                   label="Bag Size"
                   error={errors[`p-${passengerIndex}-b-${bagIndex}-size`]}
                 >
-                  <select
+                  <Dropdown
                     value={bag.size}
-                    onChange={(event) =>
-                      updateBag(passengerIndex, bagIndex, {
-                        size: event.target.value,
-                      })
+                    options={BAG_SIZES}
+                    valueKey="id"
+                    labelKey="name"
+                    placeholder="Select size"
+                    onChange={(value) =>
+                      updateBag(passengerIndex, bagIndex, { size: value })
                     }
-                  >
-                    <option value="">Select size</option>
-                    {BAG_SIZES.map((size) => (
-                      <option key={size.id} value={size.id}>
-                        {size.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
                 <Field
                   label="Weight (in Kg)"
@@ -236,6 +307,7 @@ export default function BagsStep({ data, errors, onChange }) {
                     type="number"
                     min="1"
                     value={bag.weight}
+                    onWheel={(event) => event.currentTarget.blur()}
                     onChange={(event) =>
                       updateBag(passengerIndex, bagIndex, {
                         weight: event.target.value,
@@ -245,56 +317,14 @@ export default function BagsStep({ data, errors, onChange }) {
                   />
                 </Field>
               </div>
-              <div className="field">
-                <span className="field-label">Upload photo</span>
-                <label
-                  className={`upload-drop is-compact${
-                    bag.photo ? " has-file" : ""
-                  }${bag.photo?.uploading ? " is-uploading" : ""}${
-                    bag.photo?.error ? " has-error" : ""
-                  }`}
-                >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    hidden
-                    disabled={bag.photo?.uploading}
-                    onChange={(event) => {
-                      setPhoto(passengerIndex, bagIndex, event.target.files[0]);
-                      event.target.value = "";
-                    }}
-                  />
-                  {bag.photo ? (
-                    <>
-                      <img src={bag.photo.preview} alt="" />
-                      <span>
-                        {bag.photo.uploading
-                          ? "Uploading…"
-                          : bag.photo.error || bag.photo.name}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="upload-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                          <path
-                            d="M7 18a5 5 0 0 1-.4-10 6 6 0 0 1 11.5 1.6A4 4 0 0 1 18 18"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                          />
-                          <path
-                            d="M12 18V9m0 0l-3.2 3.2M12 9l3.2 3.2"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </span>
-                      <span>Click to browse files or images</span>
-                    </>
-                  )}
-                </label>
-              </div>
+              <BagPhotos
+                photos={bagPhotoList(bag)}
+                error={errors[`p-${passengerIndex}-b-${bagIndex}-photos`]}
+                onAdd={(files) => addPhotos(passengerIndex, bagIndex, files)}
+                onRemove={(photoId) =>
+                  removePhoto(passengerIndex, bagIndex, photoId)
+                }
+              />
             </div>
           ))}
 
@@ -328,14 +358,6 @@ export default function BagsStep({ data, errors, onChange }) {
           </div>
         </section>
       ))}
-
-      <button
-        type="button"
-        className="btn-add-passenger"
-        onClick={() => setPassengers([...passengers, emptyPassenger()])}
-      >
-        + Add Passenger
-      </button>
     </div>
   );
 }

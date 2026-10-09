@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import uploadMedia from '../../config/services/media';
+import { Counter, Field } from '../ui';
+import { emptyPassenger } from './BagsStep';
 import {
   documentFieldKey,
   documentLabel,
@@ -152,8 +154,10 @@ function FileUpload({ field, file, error, onChange }) {
   );
 }
 
-export function VerificationFields({ data, errors, onChange }) {
-  const rules = getVisibleVerificationRules(data);
+export function VerificationFields({ data, errors, onChange, exclude = [] }) {
+  const rules = getVisibleVerificationRules(data).filter(
+    (rule) => !exclude.includes(documentFieldKey(rule)),
+  );
   const docs = data.docs || {};
 
   const setDoc = (field, value) => {
@@ -216,6 +220,40 @@ export function VerificationFields({ data, errors, onChange }) {
 }
 
 export default function DocumentsStep({ data, errors, onChange }) {
+  const passengers = data.bagPassengers?.length ? data.bagPassengers : [];
+
+  const setPassengers = (bagPassengers) =>
+    onChange({ bagPassengers, passengers: bagPassengers.length });
+
+  const setCount = (count) => {
+    const current = passengers.length ? passengers : [emptyPassenger()];
+    if (count === current.length) return;
+    if (count < current.length) {
+      setPassengers(current.slice(0, count));
+      return;
+    }
+    setPassengers([
+      ...current,
+      ...Array.from({ length: count - current.length }, () => emptyPassenger()),
+    ]);
+  };
+
+  const passengerFileRules = getVisibleVerificationRules(data).filter((rule) => {
+    const field = documentFieldKey(rule);
+    return isFileDocument(rule) && field !== 'passport';
+  });
+  const extraRules = getVisibleVerificationRules(data).filter(
+    (rule) => !isFileDocument(rule),
+  );
+
+  const updatePassenger = (index, patch) => {
+    setPassengers(
+      passengers.map((passenger, current) =>
+        current === index ? { ...passenger, ...patch } : passenger,
+      ),
+    );
+  };
+
   return (
     <div className="step-panel">
       <header className="section-head docs-head">
@@ -225,7 +263,76 @@ export default function DocumentsStep({ data, errors, onChange }) {
         </div>
         <span className="step-progress">2/5</span>
       </header>
-      <VerificationFields data={data} errors={errors} onChange={onChange} />
+
+      <Counter
+        label="How many passengers?"
+        hint="Select number of travelers"
+        value={passengers.length}
+        onChange={setCount}
+      />
+
+      {passengers.map((passenger, index) => (
+        <section key={passenger.id} className="passenger-card">
+          <div className="passenger-card-head">
+            <h3>Passenger {index + 1}</h3>
+          </div>
+          <Field label="Passenger Name" error={errors[`p-${index}-name`]}>
+            <input
+              value={passenger.name}
+              onChange={(event) =>
+                updatePassenger(index, { name: event.target.value })
+              }
+              placeholder="Passenger Name"
+            />
+          </Field>
+          <div className="doc-block">
+            <div className="doc-label">
+              <strong>Passport</strong>
+              <span className="required-tag">Required</span>
+            </div>
+            <FileUpload
+              file={passenger.passport}
+              error={errors[`p-${index}-passport`]}
+              onChange={(passport) => updatePassenger(index, { passport })}
+            />
+          </div>
+          {passengerFileRules.map((rule) => {
+            const field = documentFieldKey(rule);
+            const label = documentLabel(rule);
+            return (
+              <div key={field} className="doc-block">
+                <div className="doc-label">
+                  <strong>{label}</strong>
+                  <span className={rule.required ? 'required-tag' : 'optional-tag'}>
+                    {rule.required ? 'Required' : 'Optional'}
+                  </span>
+                </div>
+                <FileUpload
+                  file={passenger.documents?.[field]}
+                  error={errors[`p-${index}-${field}`]}
+                  onChange={(value) =>
+                    updatePassenger(index, {
+                      documents: {
+                        ...(passenger.documents || {}),
+                        [field]: value,
+                      },
+                    })
+                  }
+                />
+              </div>
+            );
+          })}
+        </section>
+      ))}
+
+      {extraRules.length > 0 ? (
+        <VerificationFields
+          data={data}
+          errors={errors}
+          onChange={onChange}
+          exclude={['passport']}
+        />
+      ) : null}
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { Field } from "../ui";
 import {
   COUNTRIES,
   countryById,
-  formatPickupAddress,
 } from "../catalog";
 import getPickupCoverage from "../../config/services/coverage";
 
@@ -24,55 +23,65 @@ const PREFERRED_COUNTRIES = [
 ];
 
 
-function fillFromNominatim(address, displayName) {
-  const street = [
-    address.house_number,
-    address.road,
-  ]
+let placesLibraryPromise;
+
+function loadPlacesLibrary() {
+  const key = import.meta.env.VITE_BASE_GOOGLEMAP_KEY;
+  if (!key) {
+    return Promise.reject(new Error("missing-key"));
+  }
+
+  if (window.google?.maps?.importLibrary && placesLibraryPromise) {
+    return placesLibraryPromise;
+  }
+
+  if (!window.google?.maps?.importLibrary) {
+    const loader = document.createElement("script");
+    loader.text = `(g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src="https://maps.googleapis.com/maps/api/js?"+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})(${JSON.stringify({ key, v: "weekly" })});`;
+    document.head.appendChild(loader);
+  }
+
+  if (!placesLibraryPromise) {
+    placesLibraryPromise = window.google.maps
+      .importLibrary("places")
+      .catch((error) => {
+        placesLibraryPromise = null;
+        throw error;
+      });
+  }
+
+  return placesLibraryPromise;
+}
+
+function placePart(components, type, short = false) {
+  const match = components?.find((item) => item.types?.includes(type));
+  if (!match) return "";
+  if (short) return match.shortText || match.short_name || "";
+  return match.longText || match.long_name || "";
+}
+
+function fillFromPlace(components, formattedAddress) {
+  const street = [placePart(components, "street_number"), placePart(components, "route")]
     .filter(Boolean)
     .join(" ");
-
-  const countryCode = String(
-    address.country_code || "",
-  ).toUpperCase();
-
-  const matched = COUNTRIES.find(
-    (item) => item.id === countryCode,
-  );
+  const countryCode = placePart(components, "country", true).toUpperCase();
+  const matched = COUNTRIES.find((item) => item.id === countryCode);
 
   return {
-    address1:
-      street ||
-      displayName.split(",")[0] ||
-      "",
-
+    address1: street || String(formattedAddress || "").split(",")[0] || "",
     address2:
-      address.suburb ||
-      address.neighbourhood ||
-      address.quarter ||
-      "",
-
+      placePart(components, "sublocality_level_1") ||
+      placePart(components, "sublocality") ||
+      placePart(components, "neighborhood") ||
+      placePart(components, "premise"),
     city:
-      address.city ||
-      address.town ||
-      address.village ||
-      address.county ||
-      "",
-
-    postalCode:
-      address.postcode || "",
-
-    country: matched
-      ? matched.id
-      : undefined,
-
-    phoneCode: matched
-      ? matched.code
-      : undefined,
-
-    altPhoneCode: matched
-      ? matched.code
-      : undefined,
+      placePart(components, "locality") ||
+      placePart(components, "postal_town") ||
+      placePart(components, "administrative_area_level_2"),
+    postalCode: placePart(components, "postal_code"),
+    country: matched?.id,
+    phoneCode: matched?.code,
+    altPhoneCode: matched?.code,
   };
 }
 
@@ -511,16 +520,12 @@ export default function PickupStep({
 
   const country = countryById(data.country);
 
-  const summary =
-    formatPickupAddress(data);
-
-  const [status, setStatus] =
-    useState("");
-
-  const [detecting, setDetecting] =
-    useState(false);
-
-  const askedRef = useRef(false);
+  const [status, setStatus] = useState("");
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const skipSearch = useRef(false);
+  const sessionToken = useRef(null);
 
   const checkCoverage = async (
     lat,
@@ -556,152 +561,125 @@ export default function PickupStep({
   };
 
 
-  const detectLocation = () => {
-    if (!navigator.geolocation) {
-      setStatus(
-        "Location is not supported in this browser",
-      );
-
-      return;
-    }
-
-    setDetecting(true);
-
+  const applyPlace = async (filled, lat, lng, label) => {
+    skipSearch.current = true;
+    setQuery(label);
+    setSuggestions([]);
     onChange({
+      latitude: lat,
+      longitude: lng,
+      address1: filled.address1,
+      address2: filled.address2,
+      city: filled.city,
+      postalCode: filled.postalCode,
       coverageChecking: true,
       serviced: null,
+      ...(filled.country ? { country: filled.country } : {}),
+      ...(filled.phoneCode ? { phoneCode: filled.phoneCode } : {}),
+      ...(filled.altPhoneCode ? { altPhoneCode: filled.altPhoneCode } : {}),
     });
-
-    setStatus(
-      "Detecting your location…",
-    );
-
-    navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
-        try {
-          const response =
-            await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}&addressdetails=1`,
-            );
-
-          const json =
-            await response.json();
-
-          const filled =
-            fillFromNominatim(
-              json.address || {},
-              json.display_name || "",
-            );
-
-          await checkCoverage(
-            coords.latitude,
-            coords.longitude,
-            {
-              latitude:
-                coords.latitude,
-
-              longitude:
-                coords.longitude,
-
-              address1:
-                filled.address1,
-
-              address2:
-                filled.address2,
-
-              city:
-                filled.city,
-
-              postalCode:
-                filled.postalCode,
-
-              ...(filled.country
-                ? {
-                    country:
-                      filled.country,
-                  }
-                : {}),
-
-              ...(filled.phoneCode
-                ? {
-                    phoneCode:
-                      filled.phoneCode,
-                  }
-                : {}),
-
-              ...(filled.altPhoneCode
-                ? {
-                    altPhoneCode:
-                      filled.altPhoneCode,
-                  }
-                : {}),
-            },
-          );
-
-          setStatus("");
-        } catch {
-          onChange({
-            serviced: false,
-            coverageChecking: false,
-          });
-
-          setStatus(
-            "Could not confirm pickup coverage",
-          );
-        } finally {
-          setDetecting(false);
-        }
-      },
-
-      () => {
-        setDetecting(false);
-
-        onChange({
-          coverageChecking: false,
-        });
-
-        setStatus(
-          "Allow location access to fill the address",
-        );
-      },
-
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-      },
-    );
+    try {
+      await checkCoverage(lat, lng);
+      setStatus("");
+    } catch {
+      onChange({ coverageChecking: false });
+      setStatus("Could not confirm pickup coverage");
+    }
   };
 
+  const selectSuggestion = async (item) => {
+    setSearching(true);
+    setStatus("");
+    try {
+      const place = item.prediction.toPlace();
+      await place.fetchFields({
+        fields: ["addressComponents", "location", "formattedAddress"],
+      });
+      sessionToken.current = null;
+      const lat = place.location?.lat?.();
+      const lng = place.location?.lng?.();
+      if (lat == null || lng == null) {
+        throw new Error("missing-coordinates");
+      }
+      const filled = fillFromPlace(
+        place.addressComponents,
+        place.formattedAddress,
+      );
+      await applyPlace(filled, lat, lng, item.label);
+    } catch {
+      onChange({ serviced: null, coverageChecking: false });
+      setStatus("Could not use that address");
+    } finally {
+      setSearching(false);
+    }
+  };
 
   useEffect(() => {
-    if (askedRef.current) return;
-
-    askedRef.current = true;
-
     if (
       data.latitude != null &&
       data.longitude != null &&
       data.airport
     ) {
-      onChange({
-        coverageChecking: true,
-      });
-
-      checkCoverage(
-        data.latitude,
-        data.longitude,
-      ).catch(() => {
+      checkCoverage(data.latitude, data.longitude).catch(() => {
         onChange({
           serviced: false,
           coverageChecking: false,
         });
       });
+    }
+    // Recheck a previously chosen address only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      return;
+  useEffect(() => {
+    if (skipSearch.current) {
+      skipSearch.current = false;
+      return undefined;
     }
 
-    detectLocation();
-  }, []);
+    const term = query.trim();
+    if (term.length < 3) {
+      setSuggestions([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const places = await loadPlacesLibrary();
+        if (!sessionToken.current) {
+          sessionToken.current = new places.AutocompleteSessionToken();
+        }
+        const { suggestions: next } =
+          await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+            input: term,
+            sessionToken: sessionToken.current,
+          });
+        if (cancelled) return;
+        setSuggestions(
+          (next || [])
+            .map((item) => item.placePrediction)
+            .filter(Boolean)
+            .map((prediction) => ({
+              id: prediction.placeId,
+              label: prediction.text?.toString?.() || "",
+              prediction,
+            })),
+        );
+        setStatus("");
+      } catch {
+        if (!cancelled) {
+          setSuggestions([]);
+          setStatus("Address search is unavailable");
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
  
   const handlePhoneChange = (phone) => {
@@ -758,53 +736,41 @@ export default function PickupStep({
       </header>
 
       
-      <button
-        type="button"
-        className="location-card"
-        disabled={detecting}
-        onClick={detectLocation}
-      >
-        <span
-          className="location-pin"
-          aria-hidden="true"
-        >
-          {detecting ? (
-            <span className="location-spinner" />
-          ) : (
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <path
-                d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-
-              <circle
-                cx="12"
-                cy="10"
-                r="2.2"
-                fill="currentColor"
-              />
-            </svg>
-          )}
-        </span>
-
-        <div className="location-card-copy">
-          <strong>
-            Current Location
-          </strong>
-
-          <span>
-            {detecting
-              ? "Detecting your location…"
-              : status ||
-                summary ||
-                "Click to use your current location"}
-          </span>
+      <Field label="Search address">
+        <div className="address-search">
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setStatus("");
+            }}
+            placeholder="Search building, street, or area"
+            autoComplete="off"
+            aria-autocomplete="list"
+            disabled={searching}
+          />
+          {suggestions.length > 0 ? (
+            <ul className="address-search-list" role="listbox">
+              {suggestions.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    role="option"
+                    onClick={() => selectSuggestion(item)}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
-      </button>
+      </Field>
+      {searching ? (
+        <p className="notice">Filling address from your selection…</p>
+      ) : status ? (
+        <p className="notice">{status}</p>
+      ) : null}
 
       {/* Form */}
       <div className="grid">
@@ -841,7 +807,7 @@ export default function PickupStep({
         </Field>
 
         <Field
-          label="Address Line 2"
+          label="Address Line 2 (optional)"
           error={errors.address2}
         >
           <input

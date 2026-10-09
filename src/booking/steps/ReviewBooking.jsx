@@ -9,6 +9,7 @@ import {
   documentFieldKey,
   documentLabel,
   getVisibleVerificationRules,
+  isFileDocument,
 } from "../../utility";
 
 function Row({ label, value }) {
@@ -55,6 +56,10 @@ export default function ReviewBooking({ data = {}, submitError }) {
       </p>
 
       <Card title="User Details" to="/flight">
+        <Row
+          label="Service"
+          value={data.serviceType === "ARRIVAL" ? "Arrival" : "Departure"}
+        />
         <Row label="Email" value={data.email} />
       </Card>
 
@@ -74,7 +79,19 @@ export default function ReviewBooking({ data = {}, submitError }) {
       </Card>
 
       <Card title="Documents" to="/documents">
-        {getVisibleVerificationRules(data).map((rule) => {
+        {(data.bagPassengers || []).map((passenger, index) => (
+          <div key={passenger.id}>
+            <Row label={`Passenger ${index + 1}`} value={passenger.name} />
+            <Row label="Passport" value={passenger.passport?.name} />
+            <Row
+              label="National ID"
+              value={passenger.documents?.national_id?.name}
+            />
+          </div>
+        ))}
+        {getVisibleVerificationRules(data)
+          .filter((rule) => !isFileDocument(rule))
+          .map((rule) => {
           const field = documentFieldKey(rule);
           const doc = (data.docs || {})[field];
           return (

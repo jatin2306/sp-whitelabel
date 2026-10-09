@@ -1,6 +1,6 @@
-export function Field({ label, error, hint, children }) {
+export function Field({ label, error, hint, className = '', children }) {
   return (
-    <label className={`field${error ? ' has-error' : ''}`}>
+    <label className={`field${error ? ' has-error' : ''}${className ? ` ${className}` : ''}`}>
       <span className="field-label">{label}</span>
       {children}
       {error ? (
@@ -31,10 +31,11 @@ export function Segmented({ value, onChange, options }) {
   );
 }
 
-export function Counter({ label, value, min = 1, max = 12, onChange }) {
+export function Counter({ label, hint, value, min = 1, max = 12, onChange }) {
   return (
     <div className="counter">
       <span className="counter-label">{label}</span>
+      {hint ? <span className="field-hint">{hint}</span> : null}
       <div className="counter-controls">
         <button
           type="button"

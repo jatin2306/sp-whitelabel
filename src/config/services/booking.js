@@ -5,14 +5,22 @@ import {
   CABIN_CLASSES,
   formatPickupAddress,
 } from "../../booking/catalog";
-import { contactDigits, mediaUrl } from "../../utility";
+import { bagPhotoList, contactDigits, mediaUrl } from "../../utility";
 
 export function buildBookingPayload(data) {
   const cabin = CABIN_CLASSES.find((item) => item.id === data.cabinClass);
 
   const bagSize = (id) => BAG_SIZES.find((item) => item.id === id)?.name || id;
 
+  const passengerPassport = (data.bagPassengers || [])
+    .map(
+      (passenger) =>
+        passenger.passport?.url || mediaUrl(passenger.passport?.media),
+    )
+    .find(Boolean);
+
   const passportUrl =
+    passengerPassport ||
     data.docs?.passport?.url ||
     mediaUrl(data.docs?.passport?.media) ||
     data.passport?.url ||
@@ -25,6 +33,13 @@ export function buildBookingPayload(data) {
     mediaUrl(data.boardingPass?.media);
 
   const nationalIdUrl =
+    (data.bagPassengers || [])
+      .map(
+        (passenger) =>
+          passenger.documents?.national_id?.url ||
+          mediaUrl(passenger.documents?.national_id?.media),
+      )
+      .find(Boolean) ||
     data.docs?.national_id?.url ||
     mediaUrl(data.docs?.national_id?.media) ||
     data.nationalId?.url ||
@@ -45,7 +60,7 @@ export function buildBookingPayload(data) {
   const payload = {
     email: String(data.email || "").trim(),
 
-    service_type: "DEPARTURE",
+    service_type: data.serviceType === "ARRIVAL" ? "ARRIVAL" : "DEPARTURE",
 
     airline_id: data.airline,
 
@@ -83,19 +98,29 @@ export function buildBookingPayload(data) {
 
     pickup_date: data.slotDate,
 
-    pickup_time_window_key: data.slot_key || data.slotTime,
+    pickup_time_window_key:
+      (data.start_time && data.end_time
+        ? `${String(data.start_time).slice(0, 5)}–${String(data.end_time).slice(0, 5)}`
+        : '') ||
+      data.slot_label ||
+      data.slot_key ||
+      data.slotTime,
 
     passengers: (data.bagPassengers || []).map((passenger) => ({
       full_name: String(passenger.name || "").trim(),
+      national_id:
+        passenger.documents?.national_id?.url ||
+        mediaUrl(passenger.documents?.national_id?.media) ||
+        undefined,
 
       bags: (passenger.bags || []).map((bag) => ({
         bag_size: bagSize(bag.size),
         weight_kg: Number(bag.weight),
         bag_name: String(bag.name || "").trim(),
 
-        photo_urls: [bag.photo?.url || mediaUrl(bag.photo?.media)].filter(
-          Boolean,
-        ),
+        photo_urls: bagPhotoList(bag)
+          .map((photo) => photo.url || mediaUrl(photo.media))
+          .filter(Boolean),
       })),
     })),
   };

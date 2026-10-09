@@ -1,3 +1,8 @@
+export const SERVICE_TYPES = [
+  { id: "DEPARTURE", name: "Departure" },
+  { id: "ARRIVAL", name: "Arrival" },
+];
+
 export const FLIGHT_TYPES = [
   { id: "international", name: "International" },
   { id: "domestic", name: "Domestic" },
@@ -173,11 +178,12 @@ export const BAG_SIZES = [
 export const STEPS = [
   { id: 1, path: "/flight", label: "Flight" },
   { id: 2, path: "/documents", label: "Documents" },
-  { id: 3, path: "/pickup", label: "Pickup" },
-  { id: 4, path: "/timeslot", label: "Timeslot" },
+  { id: 3, path: "/pickup", label: "Pickups" },
+  { id: 4, path: "/timeslot", label: "Time Slot" },
   { id: 5, path: "/bags", label: "Bags" },
 ];
 
 export const SUCCESS_PATH = "/success";
 export const REVIEW_PATH = "/review";
 export const PAYMENT_PATH = "/pay";
+export const INTRO_PATH = "/";

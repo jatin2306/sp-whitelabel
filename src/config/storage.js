@@ -1,4 +1,4 @@
-import { mediaUrl } from '../utility';
+import { bagPhotoList, mediaUrl } from '../utility';
 
 const STORAGE_KEY = 'sp-whitelabel-booking';
 
@@ -28,16 +28,23 @@ function serializeBooking(data) {
     boardingPass: serializeDoc(boardingPass || docs?.boarding_pass),
     bagPassengers: (bagPassengers || []).map((passenger) => ({
       ...passenger,
+      passport: serializeDoc(passenger.passport),
+      documents: Object.fromEntries(
+        Object.entries(passenger.documents || {}).map(([key, doc]) => [
+          key,
+          serializeDoc(doc),
+        ]),
+      ),
       bags: (passenger.bags || []).map((bag) => ({
         ...bag,
-        photo: bag.photo
-          ? {
-              name: bag.photo.name,
-              type: bag.photo.type,
-              media: bag.photo.media ?? null,
-              url: bag.photo.url || mediaUrl(bag.photo.media),
-            }
-          : null,
+        photo: null,
+        photos: bagPhotoList(bag).map((photo) => ({
+          id: photo.id,
+          name: photo.name,
+          type: photo.type,
+          media: photo.media ?? null,
+          url: photo.url || mediaUrl(photo.media),
+        })),
       })),
     })),
   };

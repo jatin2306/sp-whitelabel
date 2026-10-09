@@ -1,7 +1,7 @@
 const DEFAULTS = {
   company: 'Smartporters',
   primary: '#111111',
-  accent: '#C8F000',
+  accent: '#2F80FF',
   logo: '',
   currency: 'USD',
 };

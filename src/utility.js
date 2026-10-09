@@ -181,6 +181,20 @@ export function documentLabel(rule) {
   );
 }
 
+export function bagPhotoList(bag) {
+  if (Array.isArray(bag?.photos)) return bag.photos;
+  return bag?.photo ? [bag.photo] : [];
+}
+
 export function anyDocumentUploading(data) {
-  return Object.values(data?.docs || {}).some((item) => item?.uploading);
+  const bookingDocs = Object.values(data?.docs || {}).some(
+    (item) => item?.uploading,
+  );
+  const passports = (data?.bagPassengers || []).some((passenger) => {
+    if (passenger?.passport?.uploading) return true;
+    return Object.values(passenger?.documents || {}).some(
+      (item) => item?.uploading,
+    );
+  });
+  return bookingDocs || passports;
 }

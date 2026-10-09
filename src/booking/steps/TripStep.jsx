@@ -6,7 +6,7 @@ import {
   minFlightDate,
 } from "../../utility";
 import Dropdown from "../Dropdown";
-import { CABIN_CLASSES, FLIGHT_TYPES } from "../catalog";
+import { CABIN_CLASSES, FLIGHT_TYPES, SERVICE_TYPES } from "../catalog";
 import { Field } from "../ui";
 import { useEffect, useState } from "react";
 import { VerificationFields } from "./DocumentsStep";
@@ -22,6 +22,8 @@ export default function TripStep({ data, errors, onChange }) {
   const [airlineOptions, setAirlineOptions] = useState([]);
   const [airportsLoading, setAirportsLoading] = useState(true);
   const [airlinesLoading, setAirlinesLoading] = useState(false);
+  const serviceType =
+    data.serviceType === "ARRIVAL" ? "ARRIVAL" : "DEPARTURE";
 
   useEffect(() => {
     const fetchAirports = async () => {
@@ -64,53 +66,69 @@ export default function TripStep({ data, errors, onChange }) {
   return (
     <div className="step-panel">
       <header className="section-head">
-        <h2>Flight & Passenger</h2>
-        <span className="step-progress">1/5</span>
+        <div>
+          <h2>Flight & Passenger</h2>
+          <p>Enter Flight & Passenger Details</p>
+        </div>
       </header>
 
-      <h3 className="subhead">User Details</h3>
-      <div className="grid">
-        <Field label="Email" error={errors.email}>
-          <input
-            type="email"
-            value={data.email}
-            onChange={(event) => onChange({ email: event.target.value })}
-            placeholder="jane@example.com"
-          />
-        </Field>
-      </div>
-
-      <h3 className="subhead">Flight Details</h3>
-      <div className="grid">
-        <Field label="Flight Type" error={errors.flightType}>
-          <select
-            value={data.flightType}
-            onChange={(event) =>
+      <div className="service-tabs" role="tablist" aria-label="Service type">
+        {SERVICE_TYPES.map((service) => (
+          <button
+            key={service.id}
+            type="button"
+            role="tab"
+            aria-selected={serviceType === service.id}
+            className={serviceType === service.id ? "is-active" : ""}
+            onClick={() =>
               onChange({
-                flightType: event.target.value,
+                serviceType: service.id,
                 ...clearDocs,
               })
             }
           >
-            {FLIGHT_TYPES.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
-          </select>
+            {service.name}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="subhead">User Details</h3>
+      <Field label="Email Address" error={errors.email}>
+        <input
+          type="email"
+          value={data.email}
+          onChange={(event) => onChange({ email: event.target.value })}
+          placeholder="smart@gmail.com"
+        />
+      </Field>
+
+      <h3 className="subhead">Flight Details</h3>
+      <div className="grid">
+        <Field label="Flight Type" error={errors.flightType}>
+          <Dropdown
+            value={data.flightType}
+            options={FLIGHT_TYPES}
+            valueKey="id"
+            labelKey="name"
+            placeholder="Select flight type"
+            onChange={(value) =>
+              onChange({
+                flightType: value,
+                ...clearDocs,
+              })
+            }
+          />
         </Field>
 
         <Field label="Cabin Class" error={errors.cabinClass}>
-          <select
+          <Dropdown
             value={data.cabinClass}
-            onChange={(event) => onChange({ cabinClass: event.target.value })}
-          >
-            {CABIN_CLASSES.map((cabin) => (
-              <option key={cabin.id} value={cabin.id}>
-                {cabin.name}
-              </option>
-            ))}
-          </select>
+            options={CABIN_CLASSES}
+            valueKey="id"
+            labelKey="name"
+            placeholder="Select Cabin Class"
+            onChange={(value) => onChange({ cabinClass: value })}
+          />
         </Field>
 
         <Field label="Airport" error={errors.airport}>
@@ -118,7 +136,7 @@ export default function TripStep({ data, errors, onChange }) {
             value={data.airport}
             options={airportOptions}
             loading={airportsLoading}
-            placeholder="Select airport"
+            placeholder="Select Airport"
             onChange={(value, selected) =>
               onChange({
                 airport: value,
@@ -143,12 +161,12 @@ export default function TripStep({ data, errors, onChange }) {
             }
             placeholder={
               !data.airport
-                ? "Select airport first"
+                ? "Select Airport"
                 : airlinesLoading
                   ? "Loading airlines"
                   : airlineOptions.length === 0
                     ? "No airlines for this airport"
-                    : "Select airline"
+                    : "Select Airline"
             }
             onChange={(value, selected) => {
               if (!selected) {
@@ -172,10 +190,7 @@ export default function TripStep({ data, errors, onChange }) {
             }}
           />
         </Field>
-      </div>
 
-      <h3 className="subhead">Departure Flight Details</h3>
-      <div className="grid">
         <Field label="Flight Date" error={errors.date}>
           <div className="icon-input">
             <input
@@ -225,18 +240,23 @@ export default function TripStep({ data, errors, onChange }) {
                 d="M12 8v5l3 2"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.8"r
+                strokeWidth="1.8"
               />
             </svg>
           </div>
         </Field>
-        <Field label="Flight Number" error={errors.flightNumber}>
+
+        <Field
+          className="field-full"
+          label="Flight Number"
+          error={errors.flightNumber}
+        >
           <input
             value={data.flightNumber}
             onChange={(event) =>
               onChange({ flightNumber: event.target.value.toUpperCase() })
             }
-            placeholder="e.g. EK500"
+            placeholder="Enter Number"
           />
         </Field>
       </div>

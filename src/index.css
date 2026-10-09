@@ -12,9 +12,9 @@ body,
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
-  background: #f6f4ea;
-  color: #111111;
+  font-family: Poppins, 'Segoe UI', sans-serif;
+  background: #ffffff;
+  color: #1c1c1c;
   -webkit-font-smoothing: antialiased;
 }
 

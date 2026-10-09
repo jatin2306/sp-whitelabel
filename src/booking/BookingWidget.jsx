@@ -12,6 +12,7 @@ import {
   airportLabel,
   CABIN_CLASSES,
   formatPickupAddress,
+  INTRO_PATH,
   PAYMENT_PATH,
   REVIEW_PATH,
   STEPS,
@@ -25,11 +26,14 @@ import DocumentsStep from "./steps/DocumentsStep";
 import PickupStep from "./steps/PickupStep";
 import PaymentPage from "./steps/PaymentPage";
 import TimeslotStep from "./steps/TimeslotStep";
+import IntroPage from "./steps/IntroPage";
 import TripStep from "./steps/TripStep";
 import { clearBooking, loadBooking, saveBooking } from "../config/storage";
 import createBooking, { getCheckout } from "../config/services/booking";
 import {
   anyDocumentUploading,
+  bagPhotoList,
+  contactDigits,
   documentFieldKey,
   documentLabel,
   getVisibleVerificationRules,
@@ -46,8 +50,9 @@ import "./BookingWidget.css";
 import ReviewBooking from "./steps/ReviewBooking";
 
 const INITIAL_DATA = {
+  serviceType: "DEPARTURE",
   flightType: "international",
-  cabinClass: "premium-economy",
+  cabinClass: "",
   airport: "",
   airline: "",
   airlineLabel: "",
@@ -140,7 +145,38 @@ function validate(step, data) {
   }
 
   if (step === 2) {
-    const rules = getVisibleVerificationRules(data);
+    const travelers = data.bagPassengers || [];
+    if (!travelers.length) errors.bagPassengers = "Add at least one passenger";
+    travelers.forEach((passenger, index) => {
+      if (!String(passenger.name || "").trim()) {
+        errors[`p-${index}-name`] = "Enter passenger name";
+      }
+      const passport = passenger.passport;
+      if (passport?.uploading) {
+        errors[`p-${index}-passport`] =
+          "Please wait for the passport to finish uploading";
+      } else if (!(passport?.url || mediaUrl(passport?.media))) {
+        errors[`p-${index}-passport`] = "Please upload a passport";
+      }
+
+      getVisibleVerificationRules(data).forEach((rule) => {
+        const field = documentFieldKey(rule);
+        if (!isFileDocument(rule) || field === "passport") return;
+        const doc = passenger.documents?.[field];
+        const label = documentLabel(rule);
+        if (doc?.uploading) {
+          errors[`p-${index}-${field}`] =
+            `Please wait for ${label} to finish uploading`;
+        } else if (rule.required && !(doc?.url || mediaUrl(doc?.media))) {
+          errors[`p-${index}-${field}`] =
+            `Please upload a ${label.toLowerCase()}`;
+        }
+      });
+    });
+
+    const rules = getVisibleVerificationRules(data).filter(
+      (rule) => !isFileDocument(rule),
+    );
     const docs = data.docs || {};
     rules.forEach((rule) => {
       const field = documentFieldKey(rule);
@@ -161,7 +197,6 @@ function validate(step, data) {
   if (step === 3) {
     required("floor", "Enter room / apartment / floor");
     required("address1", "Enter address line 1");
-    required("address2", "Enter address line 2");
     required("city", "Enter a city");
     required("postalCode", "Enter a postal code");
     required("country", "Select a country");
@@ -183,6 +218,13 @@ function validate(step, data) {
       !isValidContactNumber(data.altPhone, data.altPhoneCountry)
     ) {
       errors.altPhone = "Enter a valid alternate number";
+    } else if (
+      actualAltPhoneDigits.length > 0 &&
+      contactDigits(data.phoneCode, data.phone) ===
+        contactDigits(data.altPhoneCode, data.altPhone)
+    ) {
+      errors.altPhone =
+        "Alternate contact cannot be the same as the contact number";
     }
 
     if (data.serviced === false) {
@@ -231,6 +273,10 @@ function validate(step, data) {
         } else if (maxKg != null && Number(bag.weight) > Number(maxKg)) {
           errors[`p-${passengerIndex}-b-${bagIndex}-weight`] =
             `Weight cannot be more than ${maxKg} kg`;
+        }
+        if (bagPhotoList(bag).some((photo) => photo.uploading)) {
+          errors[`p-${passengerIndex}-b-${bagIndex}-photos`] =
+            "Please wait for photos to finish uploading";
         }
       });
     });
@@ -374,6 +420,7 @@ function BookingLayout() {
   const isSuccess = pathname === SUCCESS_PATH;
   const isReview = pathname === REVIEW_PATH;
   const isPayment = pathname === PAYMENT_PATH;
+  const isIntro = pathname === INTRO_PATH;
   const total = calcTotal(data);
 
   useIframeResize([
@@ -385,6 +432,7 @@ function BookingLayout() {
     data.bagPassengers?.length,
     data.slotDate,
     isReview,
+    isIntro,
   ]);
 
   useEffect(() => {
@@ -536,42 +584,45 @@ function BookingLayout() {
     setBookingRef("");
     setSubmitError("");
     setPaymentSession(null);
-    navigate(STEPS[0].path, { replace: true });
+    navigate(INTRO_PATH, { replace: true });
   };
 
   return (
-    <div className="widget">
-      {!isSuccess && !isReview && !isPayment && (
-        <ol className="stepper" aria-label="Booking steps">
-          {STEPS.map((item) => (
-            <li
-              key={item.id}
-              className={
-                item.id === step
-                  ? "is-current"
-                  : item.id < step
-                    ? "is-done"
-                    : ""
-              }
-            >
-              <button
-                type="button"
-                disabled={!fromReview && item.id > step}
-                onClick={() =>
-                  (fromReview || item.id < step) &&
-                  navigate(item.path, {
-                    state: fromReview ? { fromReview: true } : undefined,
-                  })
-                }
-              >
-                <span>{item.id < step ? "✓" : item.id}</span>
-                {item.label}
-              </button>
-            </li>
-          ))}
-        </ol>
-      )}
-      <main className="widget-body">
+    <div className={`widget${isIntro ? " is-intro" : ""}`}>
+        {!isSuccess && !isReview && !isPayment && !isIntro && (
+          <>
+            <h1 className="service-headline">Service Headline</h1>
+            <ol className="stepper" aria-label="Booking steps">
+              {STEPS.map((item) => (
+                <li
+                  key={item.id}
+                  className={
+                    item.id === step
+                      ? "is-current"
+                      : item.id < step
+                        ? "is-done"
+                        : ""
+                  }
+                >
+                  <button
+                    type="button"
+                    disabled={!fromReview && item.id > step}
+                    onClick={() =>
+                      (fromReview || item.id < step) &&
+                      navigate(item.path, {
+                        state: fromReview ? { fromReview: true } : undefined,
+                      })
+                    }
+                  >
+                    <span>{String(item.id).padStart(2, "0")}</span>
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+        <main className="widget-body">
         <Outlet
           context={{
             data,
@@ -593,18 +644,14 @@ function BookingLayout() {
         />
       </main>
 
-      {!isSuccess && !isPayment && (
-        <footer
-          className={`widget-footer${
-            step === 1 && !isReview && !fromReview ? " is-single" : ""
-          }`}
-        >
-          {(step > 1 || isReview || fromReview) && (
+        {!isSuccess && !isPayment && !isIntro && (
+          <footer className="widget-footer">
             <button
               type="button"
               className="btn-ghost"
               disabled={
-                (step === 1 || step === 2) && anyDocumentUploading(data)
+                (step === 1 && !isReview && !fromReview) ||
+                ((step === 1 || step === 2) && anyDocumentUploading(data))
               }
               onClick={() => {
                 if (isReview || fromReview) {
@@ -612,36 +659,36 @@ function BookingLayout() {
                   return;
                 }
                 const previous = STEPS.find((item) => item.id === step - 1);
-                navigate(previous.path);
+                if (previous) navigate(previous.path);
               }}
             >
-              Back
+              BACK
             </button>
-          )}
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={goNext}
-            disabled={
-              submitting ||
-              ((step === 1 || step === 2) && anyDocumentUploading(data)) ||
-              (step === 3 && (data.coverageChecking || data.serviced === false))
-            }
-          >
-            {anyDocumentUploading(data) && (step === 1 || step === 2)
-              ? "Uploading…"
-              : submitting
-                ? "Sending…"
-                : isReview
-                  ? "Confirm booking"
-                  : fromReview
-                    ? "Save & review"
-                    : step === 5
-                      ? "Review Booking"
-                      : "Continue"}
-          </button>
-        </footer>
-      )}
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={goNext}
+              disabled={
+                submitting ||
+                ((step === 1 || step === 2) && anyDocumentUploading(data)) ||
+                (step === 3 &&
+                  (data.coverageChecking || data.serviced === false))
+              }
+            >
+              {anyDocumentUploading(data) && (step === 1 || step === 2)
+                ? "UPLOADING…"
+                : submitting
+                  ? "SENDING…"
+                  : isReview
+                    ? "CONFIRM BOOKING"
+                    : fromReview
+                      ? "SAVE & REVIEW"
+                      : step === 5
+                        ? "REVIEW BOOKING"
+                        : "CONTINUE"}
+            </button>
+          </footer>
+        )}
     </div>
   );
 }
@@ -650,7 +697,7 @@ export default function BookingWidget() {
   return (
     <Routes>
       <Route element={<BookingLayout />}>
-        <Route index element={<Navigate to={STEPS[0].path} replace />} />
+        <Route index element={<IntroPage />} />
         <Route path="flight" element={<StepPage Step={TripStep} />} />
         <Route path="documents" element={<StepPage Step={DocumentsStep} />} />
         <Route path="pickup" element={<StepPage Step={PickupStep} />} />
@@ -660,7 +707,7 @@ export default function BookingWidget() {
         <Route path="pay" element={<PaymentRoute />} />
         <Route path="success" element={<SuccessPage />} />
       </Route>
-      <Route path="*" element={<Navigate to={STEPS[0].path} replace />} />
+      <Route path="*" element={<Navigate to={INTRO_PATH} replace />} />
     </Routes>
   );
 }

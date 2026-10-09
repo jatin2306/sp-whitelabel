@@ -28,6 +28,13 @@ function flightTime(value) {
   return String(value).slice(0, 5);
 }
 
+function windowKey(slot) {
+  const start = flightTime(slot.start_time);
+  const end = flightTime(slot.end_time);
+  if (start && end) return `${start}–${end}`;
+  return slot.label || slot.key || slot.value;
+}
+
 export default function TimeslotStep({ data, errors, onChange }) {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -98,7 +105,15 @@ export default function TimeslotStep({ data, errors, onChange }) {
               min={minDate}
               max={maxDate}
               onChange={(event) =>
-                onChange({ slotDate: event.target.value, slotTime: '' })
+                onChange({
+                  slotDate: event.target.value,
+                  slotTime: '',
+                  slot_id: '',
+                  slot_key: '',
+                  slot_label: '',
+                  start_time: '',
+                  end_time: '',
+                })
               }
             />
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -142,7 +157,7 @@ export default function TimeslotStep({ data, errors, onChange }) {
                       onChange({
                         slotTime: slot.value,
                         slot_id: slot.value,
-                        slot_key: slot.key,
+                        slot_key: windowKey(slot),
                         slot_label: slot.label,
                         start_time: slot.start_time,
                         end_time: slot.end_time,
