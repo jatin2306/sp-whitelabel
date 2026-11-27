@@ -92,6 +92,19 @@ export default function TripStep({ data, errors, onChange }) {
         ))}
       </div>
 
+      <h3 className="subhead">
+        {serviceType === "ARRIVAL" ? "Arrival" : "Departure"}
+      </h3>
+      <Field label="Flight Number" error={errors.flightNumber}>
+        <input
+          value={data.flightNumber}
+          onChange={(event) =>
+            onChange({ flightNumber: event.target.value.toUpperCase() })
+          }
+          placeholder="Enter Number"
+        />
+      </Field>
+
       <h3 className="subhead">User Details</h3>
       <Field label="Email Address" error={errors.email}>
         <input
@@ -246,19 +259,6 @@ export default function TripStep({ data, errors, onChange }) {
           </div>
         </Field>
 
-        <Field
-          className="field-full"
-          label="Flight Number"
-          error={errors.flightNumber}
-        >
-          <input
-            value={data.flightNumber}
-            onChange={(event) =>
-              onChange({ flightNumber: event.target.value.toUpperCase() })
-            }
-            placeholder="Enter Number"
-          />
-        </Field>
       </div>
 
       {/* <h3 className="subhead">Required documents</h3>

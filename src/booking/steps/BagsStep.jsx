@@ -3,7 +3,12 @@ import Dropdown from "../Dropdown";
 import { Field } from "../ui";
 import { BAG_SIZES, CABIN_CLASSES } from "../catalog";
 import uploadMedia from "../../config/services/media";
-import { bagPhotoList, mediaUrl } from "../../utility";
+import {
+  bagPhotoList,
+  bagWeightError,
+  mediaUrl,
+  weightLimits,
+} from "../../utility";
 import checkWeight from "../../config/services/checkWeight";
 
 function nextId(prefix) {
@@ -78,9 +83,7 @@ function BagPhotos({ photos, error, onAdd, onRemove }) {
 
 export default function BagsStep({ data, errors, onChange }) {
   const passengers = data.bagPassengers || [];
-  const perPassenger = data.weightCheck?.per_passenger;
-  const maxKg = perPassenger?.max_weight_kg_per_bag;
-  const bagsAllowed = perPassenger?.checked_bags_allowed;
+  const { maxKg, totalKg, bagsAllowed } = weightLimits(data.weightCheck);
 
   useEffect(() => {
     const airline_id = data.airline;
@@ -102,7 +105,12 @@ export default function BagsStep({ data, errors, onChange }) {
           passenger_count: passengers.length,
           cabin_class,
         });
-        if (!cancelled) onChange({ weightCheck: response });
+        const payload = response?.per_passenger
+          ? response
+          : response?.data?.per_passenger
+            ? response.data
+            : null;
+        if (!cancelled) onChange({ weightCheck: payload });
       } catch {
         if (!cancelled) onChange({ weightCheck: null });
       }
@@ -215,7 +223,7 @@ export default function BagsStep({ data, errors, onChange }) {
     <div className="step-panel">
       <header className="section-head">
         <h2>Bags & Declarations</h2>
-        <span className="step-progress">5/5</span>
+        <span className="step-progress">4/5</span>
       </header>
 
       {maxKg != null && (
@@ -231,14 +239,15 @@ export default function BagsStep({ data, errors, onChange }) {
           </div>
 
           <Field
+            className="field-locked"
             label="Passenger Name"
             error={errors[`p-${passengerIndex}-name`]}
           >
             <input
               value={passenger.name}
-              onChange={(event) =>
-                updatePassenger(passengerIndex, { name: event.target.value })
-              }
+              readOnly
+              tabIndex={-1}
+              aria-readonly="true"
               placeholder="Full name as on ticket"
             />
           </Field>
@@ -296,23 +305,23 @@ export default function BagsStep({ data, errors, onChange }) {
                 <Field
                   label="Weight (in Kg)"
                   error={
-                    maxKg != null &&
-                    String(bag.weight || "").trim() &&
-                    Number(bag.weight) > Number(maxKg)
-                      ? `Weight cannot be more than ${maxKg} kg`
-                      : errors[`p-${passengerIndex}-b-${bagIndex}-weight`]
+                    bagWeightError(bag.weight, maxKg, { required: false }) ||
+                    errors[`p-${passengerIndex}-b-${bagIndex}-weight`]
                   }
                 >
                   <input
                     type="number"
-                    min="1"
+                    min="0.1"
+                    step="0.1"
+                    max={maxKg ?? undefined}
+                    inputMode="decimal"
                     value={bag.weight}
                     onWheel={(event) => event.currentTarget.blur()}
-                    onChange={(event) =>
-                      updateBag(passengerIndex, bagIndex, {
-                        weight: event.target.value,
-                      })
-                    }
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      if (next !== "" && !/^\d*\.?\d*$/.test(next)) return;
+                      updateBag(passengerIndex, bagIndex, { weight: next });
+                    }}
                     placeholder={maxKg != null ? `Max ${maxKg}` : "Weight"}
                   />
                 </Field>
@@ -356,6 +365,29 @@ export default function BagsStep({ data, errors, onChange }) {
               </span>
             )}
           </div>
+          {(() => {
+            const totalWeight = passenger.bags.reduce((sum, bag) => {
+              const value = Number(bag.weight);
+              return Number.isFinite(value) && value > 0 ? sum + value : sum;
+            }, 0);
+            const totalError =
+              totalKg != null &&
+              passenger.bags.some((bag) => String(bag.weight || "").trim()) &&
+              totalWeight > totalKg
+                ? `Total bag weight cannot be more than ${totalKg} kg`
+                : errors[`p-${passengerIndex}-weight-total`];
+            if (totalError) {
+              return <p className="inline-error">{totalError}</p>;
+            }
+            if (totalKg != null) {
+              return (
+                <p className="notice">
+                  Combined bag weight cannot be more than {totalKg} kg.
+                </p>
+              );
+            }
+            return null;
+          })()}
         </section>
       ))}
     </div>

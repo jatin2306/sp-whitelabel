@@ -699,7 +699,7 @@ select:disabled {
   width: auto;
   max-width: 100%;
   border: 0;
-  background: transparent;
+  background: #f3f4f6;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -721,7 +721,7 @@ select:disabled {
   display: grid;
   place-items: center;
   border: 1px solid #d8dbe0;
-  background: transparent;
+  background: #fff;
   font-size: 10px;
   font-weight: 700;
   color: #9aa0a6;
@@ -753,6 +753,11 @@ select:disabled {
   background: #fff;
   border-color: var(--wl-accent);
   color: var(--wl-accent);
+}
+
+.stepper button:disabled {
+  background: #f3f4f6;
+  opacity: 1;
 }
 
 .step-heading {

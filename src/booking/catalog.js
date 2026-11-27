@@ -179,8 +179,8 @@ export const STEPS = [
   { id: 1, path: "/flight", label: "Flight" },
   { id: 2, path: "/documents", label: "Documents" },
   { id: 3, path: "/pickup", label: "Pickups" },
-  { id: 4, path: "/timeslot", label: "Time Slot" },
-  { id: 5, path: "/bags", label: "Bags" },
+  { id: 4, path: "/bags", label: "Bags" },
+  { id: 5, path: "/timeslot", label: "Time Slot" },
 ];
 
 export const SUCCESS_PATH = "/success";

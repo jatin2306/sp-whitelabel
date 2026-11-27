@@ -29,11 +29,66 @@ export function mapAirlineDropdownOptions(airlines) {
   return sortAz(options, (item) => item.label);
 }
 
+function validWindowHours(start, end) {
+  if (!/^\d{2}$/.test(start) || !/^\d{2}$/.test(end) || start === end) {
+    return false;
+  }
+  const startHour = Number(start);
+  const endHour = Number(end);
+  return startHour >= 0 && startHour <= 23 && endHour >= 0 && endHour <= 23;
+}
+
+function normalizeWindowKey(value) {
+  const text = String(value || "")
+    .trim()
+    .replace(/[–—−]/g, "-")
+    .replace(/\s+/g, "");
+  const match = /^(\d{1,2})-(\d{1,2})$/.exec(text);
+  if (!match) return "";
+  const start = match[1].padStart(2, "0");
+  const end = match[2].padStart(2, "0");
+  return validWindowHours(start, end) ? `${start}-${end}` : "";
+}
+
+function windowKeyFromClock(startTime, endTime) {
+  const start = String(startTime || "").match(/(\d{1,2}):\d{2}/);
+  const end = String(endTime || "").match(/(\d{1,2}):\d{2}/);
+  if (!start || !end) return "";
+  return normalizeWindowKey(`${start[1]}-${end[1]}`);
+}
+
+export function pickupWindowKey(slot = {}) {
+  const candidates = [
+    slot.pickup_time_window_key,
+    slot.key,
+    slot.slot_key,
+    slot.window_key,
+  ];
+  for (const candidate of candidates) {
+    const key = normalizeWindowKey(candidate);
+    if (key) return key;
+  }
+
+  const fromClock = windowKeyFromClock(slot.start_time, slot.end_time);
+  if (fromClock) return fromClock;
+
+  const label = String(slot.label || slot.slot_label || "").replace(
+    /[–—−]/g,
+    "-",
+  );
+  const ranged = label.match(/(\d{1,2}):\d{2}\s*-\s*(\d{1,2}):\d{2}/);
+  return ranged ? normalizeWindowKey(`${ranged[1]}-${ranged[2]}`) : "";
+}
+
 export function mapTimeslotOptions(time_slots) {
-  return time_slots.map((slot) => ({
-    value: slot.slot_id,
-    label: slot.label,
-    key: slot.key,
+  return (time_slots || []).map((slot) => ({
+    value: slot.slot_id || slot.id || slot._id,
+    label: slot.label || slot.slot_label || "",
+    key:
+      slot.pickup_time_window_key ||
+      slot.key ||
+      slot.window_key ||
+      "",
     start_time: slot.start_time,
     end_time: slot.end_time,
     available: slot.available,
@@ -48,17 +103,17 @@ export function localIsoDate(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+const FLIGHT_LEAD_MS = 48 * 60 * 60 * 1000;
+
 export function minFlightDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return localIsoDate(date);
+  return localIsoDate(new Date(Date.now() + FLIGHT_LEAD_MS));
 }
 
-export function isFlightAtLeast24HoursAhead(date, time) {
+export function isFlightAtLeast48HoursAhead(date, time) {
   if (!date || !time) return false;
   const flight = new Date(`${date}T${time}`);
   if (Number.isNaN(flight.getTime())) return false;
-  return flight.getTime() - Date.now() >= 24 * 60 * 60 * 1000;
+  return flight.getTime() - Date.now() >= FLIGHT_LEAD_MS;
 }
 
 export function isValidContactNumber(value, countryId) {
@@ -179,6 +234,36 @@ export function documentLabel(rule) {
   return (
     DOC_LABELS[field] || String(rule?.rule_type || field).replace(/_/g, " ")
   );
+}
+
+export function weightLimits(weightCheck) {
+  const perPassenger = weightCheck?.per_passenger;
+  const caps = [
+    perPassenger?.max_weight_kg_per_bag,
+    weightCheck?.platform_bag_max_kg,
+  ]
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const total = Number(perPassenger?.total_checked_weight_kg);
+  const bagsAllowed = Number(perPassenger?.checked_bags_allowed);
+
+  return {
+    maxKg: caps.length ? Math.min(...caps) : null,
+    totalKg: Number.isFinite(total) && total > 0 ? total : null,
+    bagsAllowed:
+      Number.isFinite(bagsAllowed) && bagsAllowed > 0 ? bagsAllowed : null,
+  };
+}
+
+export function bagWeightError(weight, maxKg, { required = true } = {}) {
+  const raw = String(weight ?? "").trim();
+  if (!raw) return required ? "Enter weight" : "";
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return "Enter a valid weight";
+  if (maxKg != null && value > maxKg) {
+    return `Weight cannot be more than ${maxKg} kg`;
+  }
+  return "";
 }
 
 export function bagPhotoList(bag) {

@@ -5,7 +5,12 @@ import {
   CABIN_CLASSES,
   formatPickupAddress,
 } from "../../booking/catalog";
-import { bagPhotoList, contactDigits, mediaUrl } from "../../utility";
+import {
+  bagPhotoList,
+  contactDigits,
+  mediaUrl,
+  pickupWindowKey,
+} from "../../utility";
 
 export function buildBookingPayload(data) {
   const cabin = CABIN_CLASSES.find((item) => item.id === data.cabinClass);
@@ -98,13 +103,7 @@ export function buildBookingPayload(data) {
 
     pickup_date: data.slotDate,
 
-    pickup_time_window_key:
-      (data.start_time && data.end_time
-        ? `${String(data.start_time).slice(0, 5)}–${String(data.end_time).slice(0, 5)}`
-        : '') ||
-      data.slot_label ||
-      data.slot_key ||
-      data.slotTime,
+    pickup_time_window_key: pickupWindowKey(data),
 
     passengers: (data.bagPassengers || []).map((passenger) => ({
       full_name: String(passenger.name || "").trim(),

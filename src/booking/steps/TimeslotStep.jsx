@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Field } from '../ui';
 import getTimeslots from '../../config/services/timeslots';
-import { localIsoDate, mapTimeslotOptions } from '../../utility';
+import { localIsoDate, mapTimeslotOptions, pickupWindowKey } from '../../utility';
 
 function totalBags(data) {
   const count = (data.bagPassengers || []).reduce(
@@ -28,12 +28,6 @@ function flightTime(value) {
   return String(value).slice(0, 5);
 }
 
-function windowKey(slot) {
-  const start = flightTime(slot.start_time);
-  const end = flightTime(slot.end_time);
-  if (start && end) return `${start}–${end}`;
-  return slot.label || slot.key || slot.value;
-}
 
 export default function TimeslotStep({ data, errors, onChange }) {
   const [slots, setSlots] = useState([]);
@@ -93,7 +87,7 @@ export default function TimeslotStep({ data, errors, onChange }) {
     <div className="step-panel">
       <header className="section-head">
         <h2>Select Timeslot</h2>
-        <span className="step-progress">4/5</span>
+        <span className="step-progress">5/5</span>
       </header>
 
       <div className="timeslot-card">
@@ -110,6 +104,7 @@ export default function TimeslotStep({ data, errors, onChange }) {
                   slotTime: '',
                   slot_id: '',
                   slot_key: '',
+                  pickup_time_window_key: '',
                   slot_label: '',
                   start_time: '',
                   end_time: '',
@@ -146,27 +141,32 @@ export default function TimeslotStep({ data, errors, onChange }) {
               <p className="notice">No timeslots for this date</p>
             ) : (
               <div className="slot-grid">
-                {slots.map((slot) => (
-                  <button
-                    key={slot.value}
-                    type="button"
-                    className={`slot-chip${
-                      data.slotTime === slot.value ? ' is-selected' : ''
-                    }`}
-                    onClick={() =>
-                      onChange({
-                        slotTime: slot.value,
-                        slot_id: slot.value,
-                        slot_key: windowKey(slot),
-                        slot_label: slot.label,
-                        start_time: slot.start_time,
-                        end_time: slot.end_time,
-                      })
-                    }
-                  >
-                    {slot.label}
-                  </button>
-                ))}
+                {slots.map((slot) => {
+                  const windowKey = pickupWindowKey(slot);
+                  return (
+                    <button
+                      key={slot.value}
+                      type="button"
+                      className={`slot-chip${
+                        data.slotTime === slot.value ? ' is-selected' : ''
+                      }${windowKey ? '' : ' is-unavailable'}`}
+                      disabled={!windowKey || slot.available === false}
+                      onClick={() =>
+                        onChange({
+                          slotTime: slot.value,
+                          slot_id: slot.value,
+                          slot_key: windowKey,
+                          pickup_time_window_key: windowKey,
+                          slot_label: slot.label,
+                          start_time: slot.start_time,
+                          end_time: slot.end_time,
+                        })
+                      }
+                    >
+                      {slot.label}
+                    </button>
+                  );
+                })}
               </div>
             )}
             {errors.slotTime && (

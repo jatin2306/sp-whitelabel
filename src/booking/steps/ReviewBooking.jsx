@@ -63,7 +63,11 @@ export default function ReviewBooking({ data = {}, submitError }) {
         <Row label="Email" value={data.email} />
       </Card>
 
-      <Card title="Flight" to="/flight">
+      <Card
+        title={data.serviceType === "ARRIVAL" ? "Arrival" : "Departure"}
+        to="/flight"
+      >
+        <Row label="Flight number" value={data.flightNumber} />
         <Row
           label="Flight type"
           value={data.flightType
@@ -73,7 +77,6 @@ export default function ReviewBooking({ data = {}, submitError }) {
         <Row label="Cabin class" value={cabin?.name} />
         <Row label="Airport" value={data.airportLabel || data.airport} />
         <Row label="Airline" value={data.airlineLabel || data.airline} />
-        <Row label="Flight number" value={data.flightNumber} />
         <Row label="Flight date" value={data.date} />
         <Row label="Flight time" value={data.time} />
       </Card>
@@ -117,11 +120,6 @@ export default function ReviewBooking({ data = {}, submitError }) {
         ) : null}
       </Card>
 
-      <Card title="Timeslot" to="/timeslot">
-        <Row label="Pickup date" value={data.slotDate} />
-        <Row label="Slot" value={data.slot_label || data.slotTime} />
-      </Card>
-
       {(data.bagPassengers || []).map((passenger, index) => (
         <Card key={passenger.id} title={`Passenger ${index + 1}`} to="/bags">
           <Row label="Name" value={passenger.name} />
@@ -137,6 +135,11 @@ export default function ReviewBooking({ data = {}, submitError }) {
           ))}
         </Card>
       ))}
+
+      <Card title="Timeslot" to="/timeslot">
+        <Row label="Pickup date" value={data.slotDate} />
+        <Row label="Slot" value={data.slot_label || data.slotTime} />
+      </Card>
 
       {submitError ? <p className="inline-error">{submitError}</p> : null}
     </div>

@@ -33,17 +33,20 @@ import createBooking, { getCheckout } from "../config/services/booking";
 import {
   anyDocumentUploading,
   bagPhotoList,
+  bagWeightError,
+  weightLimits,
   contactDigits,
   documentFieldKey,
   documentLabel,
   getVisibleVerificationRules,
   isFileDocument,
-  isFlightAtLeast24HoursAhead,
+  isFlightAtLeast48HoursAhead,
   isValidContactNumber,
   isValidEmail,
   localIsoDate,
   mediaUrl,
   minFlightDate,
+  pickupWindowKey,
 } from "../utility";
 import { toast } from "react-toastify";
 import "./BookingWidget.css";
@@ -112,7 +115,7 @@ function validate(step, data) {
     required("date", "Choose a flight date");
     required("time", "Choose a flight time");
     if (data.date && data.date < minFlightDate()) {
-      errors.date = "Flight date must be at least 24 hours from now";
+      errors.date = "Flight date must be at least 48 hours from now";
     }
     if (data.email && !isValidEmail(data.email)) {
       errors.email = "Enter a valid email";
@@ -121,9 +124,9 @@ function validate(step, data) {
       data.date &&
       data.time &&
       !errors.date &&
-      !isFlightAtLeast24HoursAhead(data.date, data.time)
+      !isFlightAtLeast48HoursAhead(data.date, data.time)
     ) {
-      errors.time = "Flight must be at least 24 hours from now";
+      errors.time = "Flight must be at least 48 hours from now";
     }
     // getVisibleVerificationRules(data).forEach((rule) => {
     //   const field = documentFieldKey(rule);
@@ -155,8 +158,6 @@ function validate(step, data) {
       if (passport?.uploading) {
         errors[`p-${index}-passport`] =
           "Please wait for the passport to finish uploading";
-      } else if (!(passport?.url || mediaUrl(passport?.media))) {
-        errors[`p-${index}-passport`] = "Please upload a passport";
       }
 
       getVisibleVerificationRules(data).forEach((rule) => {
@@ -167,7 +168,11 @@ function validate(step, data) {
         if (doc?.uploading) {
           errors[`p-${index}-${field}`] =
             `Please wait for ${label} to finish uploading`;
-        } else if (rule.required && !(doc?.url || mediaUrl(doc?.media))) {
+        } else if (
+          rule.required &&
+          field !== "national_id" &&
+          !(doc?.url || mediaUrl(doc?.media))
+        ) {
           errors[`p-${index}-${field}`] =
             `Please upload a ${label.toLowerCase()}`;
         }
@@ -232,7 +237,7 @@ function validate(step, data) {
     }
   }
 
-  if (step === 4) {
+  if (step === 5) {
     required("slotDate", "Select a pickup date");
     const today = localIsoDate();
     if (data.slotDate && data.slotDate < today) {
@@ -240,26 +245,28 @@ function validate(step, data) {
     } else if (data.date && data.slotDate && data.slotDate > data.date) {
       errors.slotDate = "Pickup date cannot be after the flight date";
     }
-    required("slotTime", "Select a timeslot");
+    if (!data.slotTime) {
+      errors.slotTime = "Select a timeslot";
+    } else if (!pickupWindowKey(data)) {
+      errors.slotTime = "Pickup time window is required";
+    }
   }
 
-  if (step === 5) {
+  if (step === 4) {
     const list = data.bagPassengers || [];
     if (!list.length) errors.bagPassengers = "Add at least one passenger";
+    const { maxKg, totalKg, bagsAllowed } = weightLimits(data.weightCheck);
     list.forEach((passenger, passengerIndex) => {
       if (!String(passenger.name || "").trim()) {
         errors[`p-${passengerIndex}-name`] = "Enter passenger name";
       }
       if (!passenger.bags?.length) {
         errors[`p-${passengerIndex}-bags`] = "Add at least one bag";
-      } else {
-        const bagsAllowed =
-          data.weightCheck?.per_passenger?.checked_bags_allowed;
-        if (bagsAllowed != null && passenger.bags.length > bagsAllowed) {
-          errors[`p-${passengerIndex}-bags`] =
-            `Cannot add more than ${bagsAllowed} bags`;
-        }
+      } else if (bagsAllowed != null && passenger.bags.length > bagsAllowed) {
+        errors[`p-${passengerIndex}-bags`] =
+          `Cannot add more than ${bagsAllowed} bags`;
       }
+      let totalWeight = 0;
       (passenger.bags || []).forEach((bag, bagIndex) => {
         if (!String(bag.name || "").trim()) {
           errors[`p-${passengerIndex}-b-${bagIndex}-name`] = "Enter bag name";
@@ -267,18 +274,25 @@ function validate(step, data) {
         if (!bag.size) {
           errors[`p-${passengerIndex}-b-${bagIndex}-size`] = "Select bag size";
         }
-        const maxKg = data.weightCheck?.per_passenger?.max_weight_kg_per_bag;
-        if (!String(bag.weight || "").trim()) {
-          errors[`p-${passengerIndex}-b-${bagIndex}-weight`] = "Enter weight";
-        } else if (maxKg != null && Number(bag.weight) > Number(maxKg)) {
-          errors[`p-${passengerIndex}-b-${bagIndex}-weight`] =
-            `Weight cannot be more than ${maxKg} kg`;
+        const weightError = bagWeightError(bag.weight, maxKg);
+        if (weightError) {
+          errors[`p-${passengerIndex}-b-${bagIndex}-weight`] = weightError;
+        } else {
+          totalWeight += Number(bag.weight);
         }
         if (bagPhotoList(bag).some((photo) => photo.uploading)) {
           errors[`p-${passengerIndex}-b-${bagIndex}-photos`] =
             "Please wait for photos to finish uploading";
         }
       });
+      if (
+        totalKg != null &&
+        (passenger.bags || []).length > 0 &&
+        totalWeight > totalKg
+      ) {
+        errors[`p-${passengerIndex}-weight-total`] =
+          `Total bag weight cannot be more than ${totalKg} kg`;
+      }
     });
   }
 
@@ -362,11 +376,15 @@ function SuccessPage() {
           <strong>{data.airlineLabel || data.airline}</strong>
         </div>
         <div className="review-row">
+          <span>
+            {data.serviceType === "ARRIVAL" ? "Arrival" : "Departure"}
+          </span>
+          <strong>{data.flightNumber}</strong>
+        </div>
+        <div className="review-row">
           <span>Flight</span>
           <strong>
-            {[data.flightNumber, data.date, data.time]
-              .filter(Boolean)
-              .join(" · ")}
+            {[data.date, data.time].filter(Boolean).join(" · ")}
           </strong>
         </div>
         <div className="review-row">
@@ -472,6 +490,16 @@ function BookingLayout() {
 
   const goNext = async () => {
     if (isReview) {
+      const reviewErrors = validate(5, data);
+      if (reviewErrors.slotTime || reviewErrors.slotDate) {
+        const message =
+          reviewErrors.slotTime ||
+          reviewErrors.slotDate ||
+          "Pickup time window is required";
+        setSubmitError(message);
+        toast.error(message);
+        return;
+      }
       setSubmitting(true);
       setSubmitError("");
       try {

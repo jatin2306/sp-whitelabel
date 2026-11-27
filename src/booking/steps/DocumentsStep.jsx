@@ -288,7 +288,7 @@ export default function DocumentsStep({ data, errors, onChange }) {
           <div className="doc-block">
             <div className="doc-label">
               <strong>Passport</strong>
-              <span className="required-tag">Required</span>
+              <span className="optional-tag">Optional</span>
             </div>
             <FileUpload
               file={passenger.passport}
@@ -299,12 +299,13 @@ export default function DocumentsStep({ data, errors, onChange }) {
           {passengerFileRules.map((rule) => {
             const field = documentFieldKey(rule);
             const label = documentLabel(rule);
+            const optional = field === 'national_id' || !rule.required;
             return (
               <div key={field} className="doc-block">
                 <div className="doc-label">
                   <strong>{label}</strong>
-                  <span className={rule.required ? 'required-tag' : 'optional-tag'}>
-                    {rule.required ? 'Required' : 'Optional'}
+                  <span className={optional ? 'optional-tag' : 'required-tag'}>
+                    {optional ? 'Optional' : 'Required'}
                   </span>
                 </div>
                 <FileUpload
